@@ -1,0 +1,48 @@
+{
+  "name": "narrative-arcs-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "test": "vitest run",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@chakra-ui/icons": "2.1.0",
+    "@chakra-ui/react": "2.8.0",
+    "@emotion/react": "11.11.0",
+    "@emotion/styled": "11.11.0",
+    "@tanstack/react-query": "4.36.1",
+    "framer-motion": "10.12.0",
+    "ml-matrix": "6.10.4",
+    "ml-pca": "4.1.1",
+    "plotly.js-dist-min": "2.24.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "react-plotly.js": "2.6.0",
+    "zustand": "4.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.0",
+    "@types/plotly.js": "2.12.0",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "@types/react-plotly.js": "2.6.0",
+    "@testing-library/jest-dom": "6.9.1",
+    "@testing-library/react": "16.3.0",
+    "@types/jsdom": "27.0.0",
+    "@typescript-eslint/eslint-plugin": "8.46.2",
+    "@typescript-eslint/parser": "8.46.2",
+    "@vitejs/plugin-react": "5.1.0",
+    "eslint": "8.57.1",
+    "eslint-plugin-react-hooks": "4.6.0",
+    "eslint-plugin-react-refresh": "0.4.1",
+    "jsdom": "27.0.1",
+    "typescript": "5.9.3",
+    "vite": "7.1.12",
+    "vitest": "4.0.8"
+  }
+}
