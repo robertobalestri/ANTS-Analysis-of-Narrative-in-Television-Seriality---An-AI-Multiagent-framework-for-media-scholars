@@ -1,12 +1,15 @@
 """FastAPI application main entry point."""
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from langchain_core.embeddings import Embeddings
 import logging
+import os
 
 from app.core.logging import setup_logging
 from app.core.config import check_env_or_exit
-from app.api.v1 import arcs, progressions, characters, vector, library, episodes
+from app.api.v1 import arcs, progressions, characters, vector, library, episodes, settings
 
 # Setup logging
 logger = setup_logging(__name__)
@@ -47,6 +50,7 @@ app.include_router(characters.router)
 app.include_router(vector.router)
 app.include_router(library.router)
 app.include_router(episodes.router)
+app.include_router(settings.router, prefix="/api")
 
 
 class _HealthCheckEmbeddingModel(Embeddings):
@@ -110,10 +114,31 @@ async def health_check():
     return health_status
 
 
-@app.get("/")
+@app.get("/api")
 async def root():
-    """Root endpoint."""
+    """Root API endpoint."""
     return {"message": "ANTS API", "version": "0.1.0"}
+
+# --- Static File Serving for Production ---
+# Resolve the path to the frontend dist folder
+frontend_path = os.path.join(os.path.dirname(__file__), "../../../frontend/dist")
+
+if os.path.exists(frontend_path):
+    logger.info(f"Serving frontend from: {frontend_path}")
+    # Mount the static files
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_path, "assets")), name="assets")
+    
+    # Catch-all route to serve index.html for SPA routing
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        # If the path matches an API route, it will be handled by the routers above.
+        # Otherwise, we serve index.html.
+        return FileResponse(os.path.join(frontend_path, "index.html"))
+else:
+    logger.warning(f"Frontend dist folder not found at {frontend_path}. API only mode.")
+    @app.get("/")
+    async def root_redirect():
+        return {"message": "ANTS API", "version": "0.1.0", "frontend": "not_found"}
 
 
 if __name__ == "__main__":

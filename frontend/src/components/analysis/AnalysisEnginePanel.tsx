@@ -3,28 +3,8 @@ import { Badge, Box, Button, HStack, Select, Text, VStack, useToast } from '@cha
 import { ApiClient } from '@/services/api/ApiClient';
 import { isApiSuccess } from '@/architecture/types/api';
 
-interface ExplorerEpisodeStatus {
-  series: string;
-  season: string;
-  episode: string;
-  has_plot_file: boolean;
-  has_srt_file: boolean;
-  has_dialogue_json: boolean;
-  has_analysis_artifacts: boolean;
-  progression_count: number;
-  analysis_status: 'completed' | 'error' | 'pending' | 'not_processed';
-}
-
-interface ExplorerSeason {
-  season: string;
-  episodes: ExplorerEpisodeStatus[];
-}
-
-interface ExplorerSeries {
-  code: string;
-  display_name: string;
-  seasons: ExplorerSeason[];
-}
+import type { ExplorerSeries } from '@/architecture/types';
+import { isApiError } from '@/architecture/types/api';
 
 interface AnalysisEnginePanelProps {
   seriesList: ExplorerSeries[];
@@ -39,7 +19,7 @@ const api = new ApiClient();
 export const AnalysisEnginePanel: React.FC<AnalysisEnginePanelProps> = ({
   seriesList,
   selectedSeriesCode,
-  onSelectSeries,
+  onSelectSeries: _, // Mark as unused
   onSelectSeriesManager,
   onRefresh,
 }) => {
@@ -66,24 +46,24 @@ export const AnalysisEnginePanel: React.FC<AnalysisEnginePanelProps> = ({
     );
   }
 
-  const seasonCount = seriesData.seasons.length;
-  const episodeCount = seriesData.seasons.reduce((total, season) => total + season.episodes.length, 0);
-  const plotReadyCount = seriesData.seasons.reduce(
+  const seasonCount = seriesData.seasons?.length ?? 0;
+  const episodeCount = seriesData.seasons?.reduce((total, season) => total + season.episodes.length, 0) ?? 0;
+  const plotReadyCount = seriesData.seasons?.reduce(
     (total, season) => total + season.episodes.filter((episode) => episode.analysis_status === 'pending').length,
     0
-  );
-  const subtitleOnlyCount = seriesData.seasons.reduce(
+  ) ?? 0;
+  const subtitleOnlyCount = seriesData.seasons?.reduce(
     (total, season) => total + season.episodes.filter((episode) => episode.analysis_status === 'not_processed').length,
     0
-  );
-  const processedCount = seriesData.seasons.reduce(
+  ) ?? 0;
+  const processedCount = seriesData.seasons?.reduce(
     (total, season) => total + season.episodes.filter((episode) => episode.analysis_status === 'completed').length,
     0
-  );
-  const errorCount = seriesData.seasons.reduce(
+  ) ?? 0;
+  const errorCount = seriesData.seasons?.reduce(
     (total, season) => total + season.episodes.filter((episode) => episode.analysis_status === 'error').length,
     0
-  );
+  ) ?? 0;
 
   const handleAnalyzeEpisode = async () => {
     if (!seriesData || !selectedSeason || !selectedEpisode) {
@@ -98,7 +78,8 @@ export const AnalysisEnginePanel: React.FC<AnalysisEnginePanelProps> = ({
     setIsSubmitting(false);
 
     if (!isApiSuccess(response)) {
-      toast({ title: 'Unable to analyze episode', description: response.error, status: 'error' });
+      const errorMsg = isApiError(response) ? response.error : 'Analysis failed';
+      toast({ title: 'Unable to analyze episode', description: errorMsg, status: 'error' });
       return;
     }
 
@@ -119,7 +100,8 @@ export const AnalysisEnginePanel: React.FC<AnalysisEnginePanelProps> = ({
     setIsSubmitting(false);
 
     if (!isApiSuccess(response)) {
-      toast({ title: 'Unable to analyze season', description: response.error, status: 'error' });
+      const errorMsg = isApiError(response) ? response.error : 'Analysis failed';
+      toast({ title: 'Unable to analyze season', description: errorMsg, status: 'error' });
       return;
     }
 
@@ -137,7 +119,8 @@ export const AnalysisEnginePanel: React.FC<AnalysisEnginePanelProps> = ({
     setIsSubmitting(false);
 
     if (!isApiSuccess(response)) {
-      toast({ title: 'Unable to analyze series', description: response.error, status: 'error' });
+      const errorMsg = isApiError(response) ? response.error : 'Analysis failed';
+      toast({ title: 'Unable to analyze series', description: errorMsg, status: 'error' });
       return;
     }
 

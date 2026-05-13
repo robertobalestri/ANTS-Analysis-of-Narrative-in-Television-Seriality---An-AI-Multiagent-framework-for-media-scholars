@@ -4,7 +4,6 @@ import {
   Box,
   Button,
   Divider,
-  FormControl,
   HStack,
   Input,
   SimpleGrid,
@@ -20,29 +19,8 @@ import { ApiClient } from '@/services/api/ApiClient';
 import { isApiSuccess } from '@/architecture/types/api';
 import { formatSeasonCode, formatEpisodeCode } from '@/utils/formatters';
 
-interface ExplorerEpisodeStatus {
-  series: string;
-  season: string;
-  episode: string;
-  has_plot_file: boolean;
-  has_srt_file: boolean;
-  has_dialogue_json: boolean;
-  has_analysis_artifacts: boolean;
-  progression_count: number;
-  analysis_status: 'completed' | 'error' | 'pending' | 'not_processed' | 'missing_files';
-}
-
-interface ExplorerSeason {
-  season: string;
-  episodes: ExplorerEpisodeStatus[];
-}
-
-interface ExplorerSeries {
-  code: string;
-  display_name: string;
-  poster_url?: string;
-  seasons?: ExplorerSeason[];
-}
+import type { ExplorerEpisodeStatus, ExplorerSeries } from '@/architecture/types';
+import { isApiError } from '@/architecture/types/api';
 
 interface LibraryExplorerProps {
   selectedSeries: string;
@@ -52,7 +30,6 @@ interface LibraryExplorerProps {
   onSelectAnalysisEngine?: () => void;
 }
 
-const normalizeCode = (value: string) => value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
 
 const api = new ApiClient();
 
@@ -65,7 +42,7 @@ export const LibraryExplorer: React.FC<LibraryExplorerProps> = ({
   const toast = useToast();
   const [series, setSeries] = useState<ExplorerSeries[]>([]);
   const [selectedEpisode, setSelectedEpisode] = useState<ExplorerEpisodeStatus | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [newSeasonBySeries, setNewSeasonBySeries] = useState<Record<string, string>>({});
@@ -211,8 +188,9 @@ export const LibraryExplorer: React.FC<LibraryExplorerProps> = ({
       await refreshExplorer();
       
       // Update local state
-      const updatedSeason = response.data.seasons?.find(s => s.season === selectedEpisode.season);
-      const updatedEpisode = updatedSeason?.episodes.find(e => e.episode === selectedEpisode.episode);
+      const seriesData = response.data as unknown as ExplorerSeries;
+      const updatedSeason = seriesData.seasons?.find(s => s.season === selectedEpisode.season);
+      const updatedEpisode = updatedSeason?.episodes.find(e => (e as any).episode === selectedEpisode.episode);
       if (updatedEpisode) {
         setSelectedEpisode(updatedEpisode);
       }
@@ -250,7 +228,8 @@ export const LibraryExplorer: React.FC<LibraryExplorerProps> = ({
     setIsSubmitting(false);
 
     if (!isApiSuccess(response)) {
-      toast({ title: 'Unable to upload file', description: response.error, status: 'error' });
+      const errorMsg = isApiError(response) ? response.error : 'Upload failed';
+      toast({ title: 'Unable to upload file', description: errorMsg, status: 'error' });
       return;
     }
 
@@ -402,7 +381,7 @@ export const LibraryExplorer: React.FC<LibraryExplorerProps> = ({
                           <Button
                             key={episodeItem.episode}
                             size="sm"
-                            variant={selectedEpisode?.episode === episodeItem.episode ? 'solid' : 'outline'}
+                            variant={selectedEpisode && (selectedEpisode as any).episode === episodeItem.episode ? 'solid' : 'outline'}
                             colorScheme={statusColor(episodeItem.analysis_status)}
                             onClick={() => setSelectedEpisode(episodeItem)}
                             _hover={{ transform: 'translateY(-2px)', shadow: 'md' }}

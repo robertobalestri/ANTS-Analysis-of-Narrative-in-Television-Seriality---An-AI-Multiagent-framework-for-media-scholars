@@ -20,35 +20,14 @@ import { VectorStoreTabManager } from './components/vector/VectorStoreTabManager
 import { CharacterManager } from './components/character/CharacterManager';
 import { AnalysisEnginePanel } from './components/analysis/AnalysisEnginePanel';
 import { LibraryExplorer } from './components/library/LibraryExplorer';
+import { SettingsPanel } from './components/settings/SettingsPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ApiClient, type RequestOptions } from './services/api/ApiClient';
 import { isApiSuccess } from './architecture/types/api';
-import type { NarrativeArc, Episode, LibrarySeriesStatus } from './architecture/types';
+import type { NarrativeArc, Episode, LibrarySeriesStatus, ExplorerSeries } from './architecture/types';
 
-interface ExplorerEpisodeStatus {
-  series: string;
-  season: string;
-  episode: string;
-  has_plot_file: boolean;
-  has_srt_file: boolean;
-  has_dialogue_json: boolean;
-  has_analysis_artifacts: boolean;
-  progression_count: number;
-  analysis_status: 'completed' | 'error' | 'pending' | 'not_processed';
-}
 
-interface ExplorerSeason {
-  season: string;
-  episodes: ExplorerEpisodeStatus[];
-}
-
-interface ExplorerSeries {
-  code: string;
-  display_name: string;
-  seasons?: ExplorerSeason[];
-}
-
-type WorkspaceSection = 'series-manager' | 'analysis-engine' | 'visualization-dashboard';
+type WorkspaceSection = 'series-manager' | 'analysis-engine' | 'visualization-dashboard' | 'settings';
 
 // --- Consolidated state for series selection across sections ---
 interface SeriesSelectionState {
@@ -216,7 +195,6 @@ const App: React.FC = () => {
 
   const hasNarrativeData = dashboardData.arcs.length > 0;
   const emptyStateBg = useColorModeValue('white', 'gray.800');
-  const dashboardSelectorBg = useColorModeValue('white', 'gray.800');
 
   const refreshExplorerData = async () => {
     const response = await api.request<ExplorerSeries[]>('/library/explorer');
@@ -252,6 +230,14 @@ const App: React.FC = () => {
             onSelectSeriesManager={() => setActiveSection('series-manager')}
             onRefresh={refreshExplorerData}
           />
+        </ErrorBoundary>
+      );
+    }
+
+    if (activeSection === 'settings') {
+      return (
+        <ErrorBoundary>
+          <SettingsPanel />
         </ErrorBoundary>
       );
     }
@@ -341,6 +327,15 @@ const App: React.FC = () => {
                   size="sm"
                 >
                   Visualization Dashboard
+                </Button>
+                <Button 
+                  variant={activeSection === 'settings' ? 'solid' : 'ghost'} 
+                  colorScheme={activeSection === 'settings' ? 'blue' : 'gray'}
+                  onClick={() => setActiveSection('settings')}
+                  justifyContent="flex-start"
+                  size="sm"
+                >
+                  Settings
                 </Button>
               </VStack>
             </Box>

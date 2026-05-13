@@ -35,58 +35,69 @@
 
 ---
 
-## ⚙️ Installation & Setup
+## ⚙️ Quick Start
+
+The easiest way to start **ANTS** is by using the unified startup script.
 
 ### 1. Prerequisites
-- Python 3.10 or higher
-- Node.js 18 or higher
-- An API Key from an LLM provider (OpenAI, Azure, Anthropic, etc. - managed via LiteLLM) for both LLM and embedding models.
+- **Python 3.10+**
+- **Node.js 18+** (Required only for the first build or development)
 
-### 2. Backend Setup
-1. Navigate to the `backend` directory.
-2. Create and activate a virtual environment:
+### 2. Launching the App
+1. Clone the repository and navigate to the root folder.
+2. Run the unified startup script:
    ```bash
-   python -m venv .venv
-   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   python run_app.py
    ```
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Configure your environment:
-   Copy `.env.example` to `.env` and fill in your details:
-   ```env
-   LLM_API_KEY=your_api_key
-   LLM_API_BASE=your_base_url
-   LLM_MODEL=gpt-4-turbo-preview
-   EMBED_API_KEY=your_embed_api_key
-   EMBED_API_BASE=your_embed_base_url
-   ```
+3. The script will automatically:
+   - Create a virtual environment and install Python dependencies.
+   - (Optional) Build the frontend if not already present.
+   - Start the backend server and open the application in your browser at `http://localhost:8000`.
 
-### 3. Frontend Setup
-1. Navigate to the `frontend` directory.
-2. Install node modules:
-   ```bash
-   npm install
-   ```
+### 3. Initial Configuration
+Once the application is running:
+1. Open the **Settings** panel from the sidebar.
+2. Enter your LLM provider details (OpenAI, Azure, etc.) and API keys.
+3. Save the settings. Your configuration is stored in `backend/.env`.
 
 ---
 
-## 🏃 How to Run
+## 🛠️ Manual Setup (Developers)
 
-### Start the Backend
-From the `backend` directory:
+If you wish to run backend and frontend separately for development:
+
+### Backend
 ```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate  # Or .venv\Scripts\activate on Windows
+pip install -r requirements.txt
 uvicorn app.api.main:app --reload
 ```
-The API will be available at `http://localhost:8000`.
 
-### Start the Frontend
-From the `frontend` directory:
+### Frontend
 ```bash
+cd frontend
+npm install
 npm run dev
 ```
-Access the application at `http://localhost:3000`.
+The dev server will run on `http://localhost:3000` and proxy API calls to the backend.
+
+---
+
+## 🔑 Environment Variables
+
+The system requires the following core variables (managed via **Settings** UI):
+
+| Variable | Description |
+| :--- | :--- |
+| **LLM_PROVIDER** | e.g., `openai`, `azure`, `anthropic`, `ollama` |
+| **LLM_MODEL** | The specific model name (e.g., `gpt-4o`) |
+| **LLM_API_KEY** | Your secret API key |
+| **EMBED_PROVIDER** | Provider for embeddings (e.g., `openai`, `azure`) |
+| **EMBED_MODEL** | Model for vectorization (e.g., `text-embedding-3-small`) |
+
+*Note: Technical settings like database paths and log levels are pre-configured but can be manually edited in `backend/.env` if needed.*
 
 ---
 

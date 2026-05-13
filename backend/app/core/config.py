@@ -17,6 +17,7 @@ class EnvVarSpec:
     required: bool = True
     description: str = ""
     default: Optional[str] = None
+    visible: bool = True
 
 
 # Required environment variables for the application
@@ -81,54 +82,63 @@ REQUIRED_ENV_VARS: List[EnvVarSpec] = [
         required=False,
         description="Directory for ChromaDB vector store persistence",
         default="./narrative_storage/chroma_db",
+        visible=False
     ),
     EnvVarSpec(
         name="DATABASE_NAME",
         required=False,
         description="SQLite database file path",
         default="sqlite:///./narrative_storage/narrative.db",
+        visible=False
     ),
     EnvVarSpec(
         name="LLM_RETRY_MAX_ATTEMPTS",
         required=False,
         description="Maximum retry attempts for LLM calls",
         default="3",
+        visible=False
     ),
     EnvVarSpec(
         name="LLM_RETRY_BASE_DELAY_SECONDS",
         required=False,
         description="Base delay in seconds between LLM retries",
         default="1",
+        visible=False
     ),
     EnvVarSpec(
         name="LLM_RETRY_BACKOFF_MULTIPLIER",
         required=False,
         description="Backoff multiplier for LLM retries",
         default="2",
+        visible=False
     ),
     EnvVarSpec(
         name="ARC_SIMILARITY_THRESHOLD",
         required=False,
         description="Cosine distance threshold for arc deduplication (0.0-1.0). Lower = stricter matching.",
-        default="0.35",
+        default="0.2",
+        visible=False
     ),
     EnvVarSpec(
         name="LOG_LEVEL",
         required=False,
         description="Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL",
-        default="DEBUG",
+        default="INFO",
+        visible=False
     ),
     EnvVarSpec(
         name="LOG_FILE",
         required=False,
         description="Log file path",
-        default="api.log",
+        default="logs/app.log",
+        visible=False
     ),
     EnvVarSpec(
         name="LOG_FORMAT",
         required=False,
         description="Log format: 'text' for colored output, 'json' for structured JSON",
         default="text",
+        visible=False
     ),
 ]
 
@@ -167,7 +177,18 @@ def check_env_or_exit():
     Call this at application startup before any services are initialized.
     """
     # Load .env file first
-    load_dotenv(override=True)
+    # Load .env file from the backend directory explicitly
+    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    env_path = os.path.join(backend_dir, ".env")
+    env_example_path = os.path.join(backend_dir, ".env.example")
+
+    # If .env doesn't exist, try to copy it from .env.example
+    if not os.path.exists(env_path) and os.path.exists(env_example_path):
+        import shutil
+        logger.info(f"Initializing .env from .env.example at {env_path}")
+        shutil.copyfile(env_example_path, env_path)
+
+    load_dotenv(dotenv_path=env_path, override=True)
 
     errors, warnings = validate_env_vars()
 
@@ -223,3 +244,41 @@ def get_env_summary() -> str:
             lines.append(f"  {spec.name} = <not set>")
 
     return "\n".join(lines)
+def save_env_vars(updates: dict):
+    """
+    Update the .env file with new values.
+    """
+    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    env_path = os.path.join(backend_dir, ".env")
+    
+    # Read existing lines
+    lines = []
+    if os.path.exists(env_path):
+        with open(env_path, "r") as f:
+            lines = f.readlines()
+    
+    # Update or add variables
+    updated_vars = updates.copy()
+    new_lines = []
+    
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            new_lines.append(line)
+            continue
+            
+        key = stripped.split("=")[0].strip()
+        if key in updated_vars:
+            new_lines.append(f"{key}={updated_vars.pop(key)}\n")
+        else:
+            new_lines.append(line)
+            
+    # Append any new variables that weren't in the file
+    for key, value in updated_vars.items():
+        new_lines.append(f"{key}={value}\n")
+        
+    # Write back to file
+    with open(env_path, "w") as f:
+        f.writelines(new_lines)
+    
+    return True

@@ -15,3 +15,5 @@ export type { LibrarySeriesSummary, LibrarySeriesStatus, LibraryEpisodeStatus, L
 export type { Character } from './character';
 
 export type { VectorStoreEntry } from './vector';
+
+export type { ExplorerEpisodeStatus, ExplorerSeason, ExplorerSeries } from './explorer';
