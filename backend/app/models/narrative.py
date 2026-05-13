@@ -242,6 +242,7 @@ class EpisodeMetadata(Base, table=True):
     season_id: int = Field(foreign_key="season_metadata.id", index=True)
     episode_code: str = Field(index=True)
     analysis_status: Optional[str] = Field(default="missing_files", index=True)
+    clips_completed: bool = Field(default=False)
 
     __table_args__ = (
         {"sqlite_autoincrement": True},

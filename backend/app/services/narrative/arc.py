@@ -77,23 +77,39 @@ class NarrativeArcService:
                     logger.info(f"Arc with title '{arc_data['title']}' already exists. Updating existing arc.")
                     return self.update_arc(existing_arc.id, arc_data, series, season, episode)
 
-                similar_arcs = self.vector_store_service.find_similar_arcs(
+                similar_arcs_raw = self.vector_store_service.find_similar_arcs(
                     query=f"{arc_data['title']}\n{arc_data['description']}",
                     n_results=5,
                     series=series,
-                    exclude_anthology=True
+                    exclude_anthology=False
                 )
 
+                if similar_arcs_raw:
+                    best_match = similar_arcs_raw[0]
+                    best_dist = best_match['cosine_distance']
+                    best_title = best_match['metadata'].get('title', 'Unknown')
+                    best_type = best_match['metadata'].get('arc_type', 'Unknown')
+                    logger.info(f"🔍 Vector search for '{arc_data['title']}': nearest match is '{best_title}' [{best_type}] (distance: {best_dist:.4f}, threshold: {self.similarity_threshold})")
+                else:
+                    logger.info(f"🔍 Vector search for '{arc_data['title']}': no similar arcs found in series '{series}'.")
+
+                self.similarity_threshold = 0.4
                 similar_arcs = [
-                    arc for arc in similar_arcs
+                    arc for arc in similar_arcs_raw
                     if arc['cosine_distance'] < self.similarity_threshold
                 ]
 
-                if similar_arcs:
-                    most_similar = similar_arcs[0]
-                    existing_arc = self.arc_repository.get_by_id(most_similar['metadata']['id'])
+                if similar_arcs_raw and not similar_arcs:
+                    logger.info(f"Skipping LLM comparison: nearest match distance ({best_dist:.4f}) is above threshold ({self.similarity_threshold}).")
 
-                    if existing_arc:
+                # Try matching with each similar arc until one is found to be the same
+                for most_similar in similar_arcs:
+                    matched_arc_id = most_similar['metadata'].get('id')
+                    logger.info(f"Attempting to fetch existing arc by ID: {matched_arc_id}")
+                    vector_existing_arc = self.arc_repository.get_by_id(matched_arc_id)
+
+                    if vector_existing_arc:
+                        logger.info(f"Vector similarity detected. Comparing new arc '{arc_data['title']}' with existing arc '{vector_existing_arc.title}'...")
                         merge_decision = self.llm_service.decide_arc_merging(
                             new_arc=NarrativeArc(
                                 id=str(uuid.uuid4()),
@@ -102,21 +118,30 @@ class NarrativeArcService:
                                 arc_type=arc_data['arc_type'],
                                 series=series
                             ),
-                            existing_arc=existing_arc
+                            existing_arc=vector_existing_arc
                         )
 
-                        if merge_decision.get('same_arc', False):
-                            logger.info(f"LLM decided arcs are the same. Updating existing arc.")
+                        is_same = merge_decision.get('same_arc', False)
+                        decision_str = "MERGE" if is_same else "NO MERGE"
+                        logger.info(f"LLM Decision: {decision_str} (Confidence: {merge_decision.get('confidence', 'N/A')}) - Reasoning: {merge_decision.get('reasoning', 'N/A')}")
+
+                        if is_same:
+                            logger.info(f"Arcs are the same. Updating existing arc '{vector_existing_arc.title}'.")
                             return self.update_arc(
-                                existing_arc.id,
+                                vector_existing_arc.id,
                                 arc_data,
                                 series,
                                 season,
                                 episode,
                                 merge_decision=merge_decision
                             )
+                        else:
+                            logger.info(f"Arcs are distinct. Checking next potential candidate...")
+                    else:
+                        logger.warning(f"Vector match found ID {matched_arc_id} but it does not exist in DB. Cleaning up orphaned vector entry.")
+                        self.vector_store_service.delete_documents_by_arc(matched_arc_id)
 
-                elif existing_arc:
+                if existing_arc:
                     merge_decision = self.llm_service.merge_identical_arcs(
                         new_arc=NarrativeArc(
                             id=str(uuid.uuid4()),
@@ -260,6 +285,41 @@ class NarrativeArcService:
 
                 self._handle_progressions(existing_arc, arc_data, series, season, episode, character_map=character_map)
 
+                # Evolution Logic: Refine title and description based on story progression
+                try:
+                    # Get last 10 progressions for context (excluding the very last one we just added)
+                    sorted_progressions = sorted(existing_arc.progressions, key=lambda p: (p.season, p.episode, p.ordinal_position))
+                    recent_progressions = [p.content for p in sorted_progressions[:-1]][-10:]
+                    new_progression = sorted_progressions[-1].content
+
+                    evolution = self.llm_service.evolve_arc_metadata(
+                        existing_arc.title,
+                        existing_arc.description,
+                        recent_progressions,
+                        new_progression
+                    )
+
+                    if evolution and isinstance(evolution, dict):
+                        new_title = evolution.get('title', '').strip()
+                        new_desc = evolution.get('description', '').strip()
+
+                        title_changed = new_title and new_title != existing_arc.title
+                        desc_changed = new_desc and new_desc != existing_arc.description
+
+                        if title_changed or desc_changed:
+                            change_log = []
+                            if title_changed:
+                                change_log.append(f"Title: '{existing_arc.title}' -> '{new_title}'")
+                                existing_arc.title = new_title
+                            if desc_changed:
+                                change_log.append("Description updated")
+                                existing_arc.description = new_desc
+                            
+                            logger.info(f"Arc metadata evolving: {', '.join(change_log)}")
+                            self.arc_repository.update_fields(existing_arc, {'title': existing_arc.title, 'description': existing_arc.description})
+                except Exception as eval_err:
+                    logger.warning(f"Failed to evolve arc metadata for '{existing_arc.title}': {eval_err}")
+
                 self.update_embeddings(existing_arc)
                 logger.info(f"Updated embeddings for arc '{existing_arc.title}'.")
 
@@ -291,13 +351,18 @@ class NarrativeArcService:
         """Handle adding or updating arc progressions."""
         progression_data = arc_data.get('single_episode_progression_string')
         if progression_data:
+            # Calculate ordinal position based on existing progressions for this episode
+            current_ep_progressions = [p for p in arc.progressions if p.season == season and p.episode == episode]
+            ordinal_position = len(current_ep_progressions) + 1
+
             progression = ArcProgression(
                 id=str(uuid.uuid4()),
                 content=progression_data,
                 series=series,
                 season=season,
                 episode=episode,
-                main_arc_id=arc.id
+                main_arc_id=arc.id,
+                ordinal_position=ordinal_position
             )
 
             self.session.add(progression)

@@ -60,6 +60,26 @@ class PathHandler:
     def get_suggested_episode_arc_path(self) -> str:
         return os.path.join(self.base_dir, self.series, self.season, self.episode, f"{self.series}{self.season}{self.episode}_multiagent_suggested_episode_arcs.json")
 
+    def get_video_file_path(self, extension: str) -> str:
+        """Standardized video filename: SERIES_SxxExx.ext"""
+        return os.path.join(self.base_dir, self.series, self.season, self.episode, f"{self.series}_{self.season}{self.episode}{extension}")
+
+    def get_srt_file_path(self) -> str:
+        """Standardized SRT filename: SERIES_SxxExx.srt"""
+        return os.path.join(self.base_dir, self.series, self.season, self.episode, f"{self.series}_{self.season}{self.episode}.srt")
+
+    def get_episode_scenes_dir(self) -> str:
+        """Directory for individual video scenes."""
+        return os.path.join(self.base_dir, self.series, self.season, self.episode, "scenes")
+
+    def get_scene_clip_path(self, scene_index: int, extension: str = ".mp4") -> str:
+        """Path for a specific scene video clip."""
+        return os.path.join(self.get_episode_scenes_dir(), f"scene_{scene_index:02d}{extension}")
+
+    def get_audio_file_path(self) -> str:
+        """Path for the extracted audio file (for transcription)."""
+        return os.path.join(self.base_dir, self.series, self.season, self.episode, f"{self.series}_{self.season}{self.episode}.wav")
+
     @staticmethod
     def get_episode_plot_path(base_dir: str, series: str, season: str, episode: str) -> str:
         return os.path.join(base_dir, series, season, episode, f"{series}{season}{episode}_plot.txt")

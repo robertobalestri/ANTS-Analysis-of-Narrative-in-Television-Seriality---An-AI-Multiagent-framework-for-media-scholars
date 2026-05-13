@@ -3,12 +3,14 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File
 from pydantic import BaseModel
 import os
+from pathlib import Path
 import uuid
 
 from app.core.logging import setup_logging
 from app.repositories import DatabaseSessionManager
 from app.services.ai import VectorStoreService
-from app.services.analysis import AnalysisPipelineService, EpisodeResetService, SeasonResetService
+from app.services.analysis import NarrativeArcExtractionPipelineService, EpisodeResetService, SeasonResetService
+from app.services.library.video_service import VideoService
 from app.models.narrative import SeriesMetadata, SeasonMetadata, EpisodeMetadata
 import os
 
@@ -256,11 +258,17 @@ async def upload_episode_file(series: str, season: str, episode: str, file: Uplo
         
         svc = SeriesIngestionService(base_dir=DATA_DIR)
         explorer_svc = LibraryExplorerService(base_dir=DATA_DIR)
+        video_svc = VideoService(base_dir=DATA_DIR)
         
         content = await file.read()
-        text_content = content.decode("utf-8")
         
-        result = svc.save_episode_source_file(series, season, episode, file.filename, text_content)
+        if video_svc.is_video_file(file.filename):
+            # Save as binary for video
+            result = svc.save_episode_source_file(series, season, episode, file.filename, content)
+        else:
+            # Save as text for plot/srt
+            text_content = content.decode("utf-8")
+            result = svc.save_episode_source_file(series, season, episode, file.filename, text_content)
         
         # If it's an SRT, automatically trigger plot generation
         if file.filename.lower().endswith('.srt'):
@@ -384,6 +392,25 @@ async def delete_episode_file(series: str, season: str, episode: str, file_type:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/series/{series}/{season}/{episode}/video")
+async def stream_episode_video(series: str, season: str, episode: str):
+    """Stream the video file for an episode."""
+    try:
+        from fastapi.responses import FileResponse
+        video_svc = VideoService(base_dir=DATA_DIR)
+        video_path = video_svc.get_video_path(series, season, episode)
+        
+        if video_path and os.path.exists(video_path):
+            return FileResponse(video_path)
+            
+        raise HTTPException(status_code=404, detail="Video file not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error streaming video: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Analysis endpoints
 @router.post("/series/{series}/analyze")
 async def analyze_series(series: str, background_tasks: BackgroundTasks):
@@ -433,6 +460,74 @@ async def analyze_series(series: str, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/series/{series}/{season}/{episode}/analyze-video")
+async def analyze_video_scenes(series: str, season: str, episode: str):
+    """Trigger video scene analysis for an episode."""
+    try:
+        from app.services.analysis.pipeline import AnalysisPipelineService
+        pipeline = AnalysisPipelineService()
+        result = await pipeline.analyze_video_scenes(series, season, episode)
+        if result.get("status") == "error":
+            raise HTTPException(status_code=400, detail=result.get("message"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error starting video scene analysis: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/series/{series}/{season}/{episode}/transcribe-video")
+async def transcribe_video(series: str, season: str, episode: str):
+    """Trigger video transcription for an episode."""
+    try:
+        from app.services.analysis.pipeline import AnalysisPipelineService
+        pipeline = AnalysisPipelineService()
+        result = await pipeline.transcribe_episode_video(series, season, episode)
+        if result.get("status") == "error":
+            raise HTTPException(status_code=400, detail=result.get("message"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error starting video transcription: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/series/{series}/{season}/{episode}/plot-from-srt")
+async def plot_from_srt(series: str, season: str, episode: str):
+    """Generate plot summary from an existing SRT file."""
+    try:
+        from app.services.analysis.pipeline import AnalysisPipelineService
+        pipeline = AnalysisPipelineService()
+        result = await pipeline.generate_plot_from_srt(series, season, episode)
+        if result.get("status") == "error":
+            raise HTTPException(status_code=400, detail=result.get("message"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating plot from SRT: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/series/{series}/{season}/{episode}/full-video-to-plot")
+async def full_video_to_plot(series: str, season: str, episode: str):
+    """Transcribe video and generate plot summary."""
+    try:
+        from app.services.analysis.pipeline import AnalysisPipelineService
+        pipeline = AnalysisPipelineService()
+        result = await pipeline.full_video_to_plot(series, season, episode)
+        if result.get("status") == "error":
+            raise HTTPException(status_code=400, detail=result.get("message"))
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in full video-to-plot: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/series/{series}/status")
 async def get_series_status(series: str):
     """Get detailed status for a series."""
@@ -465,19 +560,19 @@ async def get_series_status(series: str):
 
 
 # Analysis/generation endpoints
-@router.post("/explorer/{series}/{season}/{episode}/analyze")
-async def analyze_episode(series: str, season: str, episode: str):
-    """Analyze a single episode."""
+@router.post("/explorer/{series}/{season}/{episode}/narrative-arc-extraction")
+async def narrative_arc_extraction(series: str, season: str, episode: str):
+    """Run narrative arc extraction for a single episode."""
     try:
-        pipeline = AnalysisPipelineService()
-        result = await pipeline.analyze_episode(series, season, episode)
+        pipeline = NarrativeArcExtractionPipelineService()
+        result = await pipeline.run_narrative_arc_extraction_pipeline(series, season, episode)
         if result.get("status") == "error":
             raise HTTPException(status_code=500, detail=result.get("message"))
         return result
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error analyzing episode: {e}")
+        logger.error(f"Error in narrative arc extraction: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -485,7 +580,7 @@ async def analyze_episode(series: str, season: str, episode: str):
 async def analyze_season_ready(series: str, season: str, background_tasks: BackgroundTasks):
     """Analyze all plot-ready episodes in a season."""
     try:
-        pipeline = AnalysisPipelineService()
+        pipeline = NarrativeArcExtractionPipelineService()
 
         async def run():
             return await pipeline.analyze_season(series, season)
@@ -522,13 +617,33 @@ async def reset_episode(series: str, season: str, episode: str):
     try:
         reset_svc = EpisodeResetService()
         result = reset_svc.reset_episode(series, season, episode)
-        if result.get("status") == "error":
-            raise HTTPException(status_code=500, detail=result.get("message"))
         return result
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Error resetting episode: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/explorer/{series}/{season}/{episode}/reset-narrative")
+async def reset_narrative(series: str, season: str, episode: str):
+    """Reset only narrative arc extraction state."""
+    try:
+        reset_svc = EpisodeResetService()
+        result = reset_svc.reset_narrative_arc_extraction(series, season, episode)
+        return result
+    except Exception as e:
+        logger.error(f"Error resetting narrative: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/explorer/{series}/{season}/{episode}/reset-video")
+async def reset_video(series: str, season: str, episode: str):
+    """Reset only video splitting state."""
+    try:
+        reset_svc = EpisodeResetService()
+        result = reset_svc.reset_semantic_video_splitting(series, season, episode)
+        return result
+    except Exception as e:
+        logger.error(f"Error resetting video: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

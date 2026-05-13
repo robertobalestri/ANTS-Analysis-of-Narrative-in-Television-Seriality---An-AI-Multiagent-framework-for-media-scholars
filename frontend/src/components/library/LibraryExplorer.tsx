@@ -18,6 +18,7 @@ import { DeleteIcon } from '@chakra-ui/icons';
 import { ApiClient } from '@/services/api/ApiClient';
 import { isApiSuccess } from '@/architecture/types/api';
 import { formatSeasonCode, formatEpisodeCode } from '@/utils/formatters';
+import { EpisodeVideoPlayer } from './EpisodeVideoPlayer';
 
 import type { ExplorerEpisodeStatus, ExplorerSeries } from '@/architecture/types';
 import { isApiError } from '@/architecture/types/api';
@@ -49,6 +50,7 @@ export const LibraryExplorer: React.FC<LibraryExplorerProps> = ({
   const [newEpisodeBySeason, setNewEpisodeBySeason] = useState<Record<string, string>>({});
   const [plotContent, setPlotContent] = useState<string>('');
   const [isFetchingPlot, setIsFetchingPlot] = useState(false);
+  const [isVideoPlayerOpen, setIsVideoPlayerOpen] = useState(false);
 
   const selectedSeriesData = useMemo(
     () => series.find((item) => item.code === selectedSeries) ?? null,
@@ -176,7 +178,7 @@ export const LibraryExplorer: React.FC<LibraryExplorerProps> = ({
     await refreshExplorer();
   };
 
-  const handleDeleteFile = async (fileType: 'plot' | 'srt') => {
+  const handleDeleteFile = async (fileType: 'plot' | 'srt' | 'video') => {
     if (!selectedEpisode) return;
     
     setIsSubmitting(true);
@@ -185,14 +187,16 @@ export const LibraryExplorer: React.FC<LibraryExplorerProps> = ({
 
     if (isApiSuccess(response)) {
       toast({ title: 'File deleted', status: 'success' });
-      await refreshExplorer();
+      const allSeries = await refreshExplorer();
       
-      // Update local state
-      const seriesData = response.data as unknown as ExplorerSeries;
-      const updatedSeason = seriesData.seasons?.find(s => s.season === selectedEpisode.season);
-      const updatedEpisode = updatedSeason?.episodes.find(e => (e as any).episode === selectedEpisode.episode);
-      if (updatedEpisode) {
-        setSelectedEpisode(updatedEpisode);
+      // Update selected episode from the newly fetched data
+      if (allSeries) {
+        const updatedSeries = allSeries.find(s => s.code === selectedEpisode.series);
+        const updatedSeason = updatedSeries?.seasons?.find(s => s.season === selectedEpisode.season);
+        const updatedEpisode = updatedSeason?.episodes.find(e => e.episode === selectedEpisode.episode);
+        if (updatedEpisode) {
+          setSelectedEpisode(updatedEpisode);
+        }
       }
       
       if (fileType === 'plot') {
@@ -203,15 +207,23 @@ export const LibraryExplorer: React.FC<LibraryExplorerProps> = ({
     }
   };
 
-  const handleUpload = async (kind: 'plot' | 'srt', file: File) => {
+  const handleUpload = async (kind: 'plot' | 'srt' | 'video', file: File) => {
     if (!selectedEpisode) {
       return;
     }
 
-    const expectedExtension = kind === 'plot' ? '.txt' : '.srt';
-    if (!file.name.toLowerCase().endsWith(expectedExtension)) {
-      toast({ title: `Please upload a ${expectedExtension} file in the ${kind.toUpperCase()} box.`, status: 'warning' });
-      return;
+    if (kind === 'video') {
+      const videoExtensions = ['.mp4', '.mkv', '.avi', '.mov', '.webm'];
+      if (!videoExtensions.some(ext => file.name.toLowerCase().endsWith(ext))) {
+        toast({ title: `Please upload a supported video file (${videoExtensions.join(', ')}).`, status: 'warning' });
+        return;
+      }
+    } else {
+      const expectedExtension = kind === 'plot' ? '.txt' : '.srt';
+      if (!file.name.toLowerCase().endsWith(expectedExtension)) {
+        toast({ title: `Please upload a ${expectedExtension} file in the ${kind.toUpperCase()} box.`, status: 'warning' });
+        return;
+      }
     }
 
     const formData = new FormData();
@@ -273,6 +285,44 @@ export const LibraryExplorer: React.FC<LibraryExplorerProps> = ({
     await refreshExplorer();
     setSelectedEpisode(response.data);
     void fetchPlotContent(response.data.series, response.data.season, response.data.episode);
+  };
+
+  const handleAnalyzeVideo = async () => {
+    if (!selectedEpisode) return;
+    
+    setIsSubmitting(true);
+    const response = await api.analyzeVideoScenes(selectedEpisode.series, selectedEpisode.season, selectedEpisode.episode);
+    setIsSubmitting(false);
+
+    if (isApiSuccess(response)) {
+      toast({ 
+        title: 'Video analysis complete', 
+        description: response.data.message,
+        status: 'success' 
+      });
+      await refreshExplorer();
+    } else {
+      toast({ title: 'Video analysis failed', description: response.error, status: 'error' });
+    }
+  };
+
+  const handleTranscribeVideo = async () => {
+    if (!selectedEpisode) return;
+    
+    setIsSubmitting(true);
+    const response = await api.transcribeVideo(selectedEpisode.series, selectedEpisode.season, selectedEpisode.episode);
+    setIsSubmitting(false);
+
+    if (isApiSuccess(response)) {
+      toast({ 
+        title: 'Transcription complete', 
+        description: 'SRT subtitles have been generated from the video.',
+        status: 'success' 
+      });
+      await refreshExplorer();
+    } else {
+      toast({ title: 'Transcription failed', description: response.error, status: 'error' });
+    }
   };
 
 
@@ -543,6 +593,55 @@ export const LibraryExplorer: React.FC<LibraryExplorerProps> = ({
                     />
                   </Box>
                 </Box>
+                <Box borderWidth="1px" borderRadius="md" p={4}>
+                  <HStack justify="space-between" mb={1}>
+                    <Text fontWeight="medium">Video file</Text>
+                    {selectedEpisode.has_video_file && (
+                      <IconButton
+                        aria-label="Delete Video"
+                        icon={<DeleteIcon />}
+                        size="xs"
+                        variant="ghost"
+                        colorScheme="red"
+                        onClick={() => handleDeleteFile('video')}
+                        isLoading={isSubmitting}
+                      />
+                    )}
+                  </HStack>
+                  <Text color={selectedEpisode.has_video_file ? 'green.600' : 'gray.500'}>
+                    {selectedEpisode.has_video_file ? 'Present' : 'Missing'}
+                  </Text>
+                  <Box
+                    mt={3}
+                    border="2px dashed"
+                    borderColor="gray.200"
+                    borderRadius="md"
+                    p={4}
+                    textAlign="center"
+                    bg="gray.50"
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={async (event) => {
+                      event.preventDefault();
+                      const file = event.dataTransfer.files[0];
+                      if (file) {
+                        await handleUpload('video', file);
+                      }
+                    }}
+                  >
+                    <Text fontSize="sm" mb={2}>Drop video file here</Text>
+                    <Input
+                      type="file"
+                      accept="video/*"
+                      onChange={async (event) => {
+                        const file = event.target.files?.[0];
+                        if (file) {
+                          await handleUpload('video', file);
+                        }
+                        event.target.value = '';
+                      }}
+                    />
+                  </Box>
+                </Box>
               </SimpleGrid>
 
               {selectedEpisode.has_plot_file && (
@@ -583,8 +682,42 @@ export const LibraryExplorer: React.FC<LibraryExplorerProps> = ({
                   >
                     Reset episode analysis
                   </Button>
+                  {selectedEpisode.has_video_file && (
+                    <Button
+                      colorScheme="blue"
+                      leftIcon={<Text>▶</Text>}
+                      onClick={() => setIsVideoPlayerOpen(true)}
+                    >
+                      Watch Episode
+                    </Button>
+                  )}
+                  <Button
+                    colorScheme="purple"
+                    onClick={handleAnalyzeVideo}
+                    isLoading={isSubmitting}
+                    isDisabled={!selectedEpisode.has_plot_file || !selectedEpisode.has_srt_file || !selectedEpisode.has_video_file}
+                  >
+                    Analyze Video Scenes
+                  </Button>
+                  <Button
+                    colorScheme="teal"
+                    onClick={handleTranscribeVideo}
+                    isLoading={isSubmitting}
+                    isDisabled={!selectedEpisode.has_video_file}
+                  >
+                    Transcribe Video (AI)
+                  </Button>
                 </HStack>
               </Box>
+              
+              {selectedEpisode.has_video_file && (
+                <EpisodeVideoPlayer
+                  isOpen={isVideoPlayerOpen}
+                  onClose={() => setIsVideoPlayerOpen(false)}
+                  videoUrl={api.getEpisodeVideoUrl(selectedEpisode.series, selectedEpisode.season, selectedEpisode.episode)}
+                  episodeTitle={`${selectedEpisode.series} ${selectedEpisode.season}${selectedEpisode.episode}`}
+                />
+              )}
             </VStack>
           )}
         </Box>

@@ -16,6 +16,7 @@ from app.models.narrative import EpisodeMetadata, SeasonMetadata, SeriesMetadata
 from app.repositories import DatabaseSessionManager
 from app.services.filesystem.path_handler import PathHandler
 from app.services.library.episode_status import LibraryEpisodeStatusBuilder
+from app.services.library.video_service import VideoService
 from app.services.migration.metadata_migration import migrate_series_metadata_from_json
 
 logger = setup_logging(__name__)
@@ -28,6 +29,7 @@ class SeriesIngestionService:
     def __init__(self, base_dir: str = "data", db_manager: Optional[DatabaseSessionManager] = None):
         self.base_dir = base_dir
         self.status_builder = LibraryEpisodeStatusBuilder(base_dir=base_dir)
+        self.video_service = VideoService(base_dir=base_dir)
         self.db_manager = db_manager or DatabaseSessionManager()
         self.path_handler = PathHandler("", "", "", base_dir=base_dir)
 
@@ -264,7 +266,7 @@ class SeriesIngestionService:
             return saved
 
         if lowered.endswith('.srt'):
-            srt_path = episode_path / filename
+            srt_path = Path(path_handler.get_srt_file_path())
             with open(srt_path, "w", encoding="utf-8") as srt_file:
                 srt_file.write(content)
             return {
@@ -274,7 +276,24 @@ class SeriesIngestionService:
                 "source_type": "srt",
             }
 
-        raise ValidationError("Only plot .txt files or subtitle .srt files are supported")
+        if self.video_service.is_video_file(filename):
+            extension = Path(filename).suffix.lower()
+            video_path = Path(path_handler.get_video_file_path(extension))
+            # content can be str (if from text decoding) or bytes. In library.py it's decoded as utf-8.
+            # For video, we need to handle binary. 
+            # Note: library.py calls this with text_content. We need to fix library.py too.
+            mode = "wb" if isinstance(content, bytes) else "w"
+            encoding = None if isinstance(content, bytes) else "utf-8"
+            with open(video_path, mode, encoding=encoding) as video_file:
+                video_file.write(content)
+            return {
+                "season": normalized_season,
+                "episode": normalized_episode,
+                "path": str(video_path),
+                "source_type": "video",
+            }
+
+        raise ValidationError("Only plot .txt, subtitle .srt, or video files are supported")
 
     def delete_episode_file(self, series_code: str, season_code: str, episode_code: str, file_type: str) -> Dict[str, Any]:
         normalized_series, normalized_season, normalized_episode, episode_path = self._normalize_episode_target(
@@ -288,6 +307,8 @@ class SeriesIngestionService:
             file_path = Path(path_handler.get_raw_plot_file_path())
         elif file_type == "srt":
             file_path = self.status_builder.find_srt_path(episode_path)
+        elif file_type == "video":
+            file_path = self.video_service.find_video_for_episode(normalized_series, normalized_season, normalized_episode)
         else:
             raise ValidationError(f"Invalid file type for deletion: {file_type}")
 

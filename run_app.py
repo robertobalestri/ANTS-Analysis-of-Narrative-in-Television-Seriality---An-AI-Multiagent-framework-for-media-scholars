@@ -3,6 +3,13 @@ import sys
 import subprocess
 import webbrowser
 import time
+import urllib.request
+import zipfile
+import tarfile
+import io
+import platform
+import stat
+import shutil
 
 def setup_python_env(backend_dir):
     venv_dir = os.path.join(backend_dir, ".venv")
@@ -36,6 +43,95 @@ def setup_python_env(backend_dir):
     
     return venv_python
 
+def ensure_ffmpeg(backend_dir):
+    bin_dir = os.path.join(backend_dir, "bin")
+    if not os.path.exists(bin_dir):
+        os.makedirs(bin_dir)
+
+    ffmpeg_exe = os.path.join(bin_dir, "ffmpeg.exe" if sys.platform == "win32" else "ffmpeg")
+    ffprobe_exe = os.path.join(bin_dir, "ffprobe.exe" if sys.platform == "win32" else "ffprobe")
+
+    if os.path.exists(ffmpeg_exe) and os.path.exists(ffprobe_exe):
+        return bin_dir
+
+    print("\n[!] FFmpeg/FFprobe binaries not found in backend/bin.")
+    print("Downloading appropriate binaries for your OS...")
+
+    # Define URLs based on platform (using BtbN/FFmpeg-Builds for Win/Linux)
+    system = platform.system().lower()
+    
+    # BtbN URLs for Win/Linux, evermeet.cx for macOS
+    urls = {
+        "windows": "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip",
+        "linux": "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz",
+        "darwin": [
+            "https://evermeet.cx/ffmpeg/getrelease/zip",
+            "https://evermeet.cx/ffmpeg/getrelease/ffprobe/zip"
+        ]
+    }
+
+    if system not in urls:
+        print(f"[-] Unsupported system: {system}. Please install FFmpeg manually.")
+        return None
+
+    try:
+        download_urls = urls[system] if isinstance(urls[system], list) else [urls[system]]
+        
+        # Temporary directory for extraction
+        temp_extract = os.path.join(bin_dir, "temp_extract")
+        if os.path.exists(temp_extract):
+            shutil.rmtree(temp_extract)
+        os.makedirs(temp_extract)
+
+        for url in download_urls:
+            print(f"  Downloading from {url}...")
+            # Use a more descriptive User-Agent to avoid issues with some APIs
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req) as response:
+                content = response.read()
+                # Determine format from URL or Content-Type (default to zip)
+                is_tar = url.endswith(".tar.xz") or "application/x-xz" in response.info().get_content_type()
+                
+                if is_tar:
+                    with tarfile.open(fileobj=io.BytesIO(content), mode="r:xz") as t:
+                        t.extractall(temp_extract)
+                else:
+                    with zipfile.ZipFile(io.BytesIO(content)) as z:
+                        z.extractall(temp_extract)
+        
+        # Find ffmpeg and ffprobe in the extracted files
+        found_tools = {}
+        target_tools = ["ffmpeg", "ffprobe"]
+        if sys.platform == "win32":
+            target_tools = ["ffmpeg.exe", "ffprobe.exe"]
+
+        for root, dirs, files in os.walk(temp_extract):
+            for file in files:
+                if file in target_tools:
+                    found_tools[file] = os.path.join(root, file)
+
+        # Move tools to bin_dir
+        for tool, src_path in found_tools.items():
+            dest_path = os.path.join(bin_dir, tool)
+            if os.path.exists(dest_path):
+                os.remove(dest_path)
+            shutil.move(src_path, dest_path)
+            
+            # Set executable permissions on non-windows
+            if sys.platform != "win32":
+                st = os.stat(dest_path)
+                os.chmod(dest_path, st.st_mode | stat.S_IEXEC)
+
+        # Cleanup
+        shutil.rmtree(temp_extract)
+                
+        print("[+] FFmpeg and FFprobe successfully installed in backend/bin.")
+    except Exception as e:
+        print(f"[-] Error downloading FFmpeg: {e}")
+        return None
+
+    return bin_dir
+
 def run():
     # Detect the directory of this script
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -48,7 +144,13 @@ def run():
     # 1. Setup Python Environment
     python_exe = setup_python_env(backend_dir)
     
-    # 2. Check for frontend build
+    # 2. Setup FFmpeg
+    bin_dir = ensure_ffmpeg(backend_dir)
+    if bin_dir:
+        # Add bin directory to PATH for the current process and its children
+        os.environ["PATH"] = bin_dir + os.pathsep + os.environ.get("PATH", "")
+    
+    # 3. Check for frontend build
     if not os.path.exists(frontend_dist):
         print(f"\n[!] Frontend build not found at: {frontend_dist}")
         choice = input("Would you like to build the frontend now? (Requires Node.js/npm) (y/n): ")

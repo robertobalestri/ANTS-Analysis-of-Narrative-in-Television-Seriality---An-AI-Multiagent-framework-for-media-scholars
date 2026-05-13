@@ -1,6 +1,6 @@
 from typing import Dict, List
 
-from app.services.pipeline.analysis_pipeline import analyze_episode
+from app.services.pipeline.narrative_arc_extraction_pipeline import run_narrative_arc_extraction_pipeline as analyze_episode
 from app.services.filesystem.path_handler import PathHandler
 from app.services.library.ingestion import SeriesIngestionService
 from app.core.logging import setup_logging
@@ -8,12 +8,12 @@ from app.core.logging import setup_logging
 logger = setup_logging(__name__)
 
 
-class AnalysisService:
+class NarrativeArcExtractionService:
     def __init__(self, base_dir: str = "data"):
         self.base_dir = base_dir
         self.ingestion_service = SeriesIngestionService(base_dir=base_dir)
 
-    async def analyze_episode(self, series_code: str, season_code: str, episode_code: str) -> None:
+    async def run_narrative_arc_extraction(self, series_code: str, season_code: str, episode_code: str) -> None:
         await analyze_episode(series_code, season_code, episode_code, base_dir=self.base_dir)
 
     async def analyze_series(self, series_code: str) -> Dict[str, List[str]]:
@@ -24,6 +24,6 @@ class AnalysisService:
             if not PathHandler.file_exists(plot_path):
                 logger.warning(f"Skipping {item['season']} {item['episode']} because no plot file exists")
                 continue
-            await self.analyze_episode(series_code, item["season"], item["episode"])
+            await self.run_narrative_arc_extraction(series_code, item["season"], item["episode"])
             processed.append(f"{item['season']}{item['episode']}")
         return {"processed_episodes": processed}

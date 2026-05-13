@@ -20,11 +20,12 @@ logger = setup_logging(__name__)
 def _is_protected_file(path: Path) -> bool:
     """Return True if the file is source data that must not be deleted."""
     name = path.name.lower()
-    if name.endswith(".srt"):
+    # Source narrative files
+    if name.endswith(".srt") or name.endswith("_plot.txt") or name.endswith("_dialogues.txt"):
         return True
-    if name.endswith("_plot.txt"):
-        return True
-    if name.endswith("_dialogues.txt"):
+    # Video source files
+    video_extensions = {".mp4", ".mkv", ".avi", ".mov", ".webm"}
+    if path.suffix.lower() in video_extensions:
         return True
     return False
 
@@ -39,18 +40,90 @@ class EpisodeResetService:
 
     def reset_episode(self, series: str, season: str, episode: str) -> Dict[str, object]:
         """Reset an episode's analysis artifacts. Safe to call regardless of current state."""
-        derived_files_deleted = self._delete_all_derived_files(series, season, episode)
+        # This now resets EVERYTHING by combining granular resets
+        narrative_results = self.reset_narrative_arc_extraction(series, season, episode)
+        video_results = self.reset_semantic_video_splitting(series, season, episode)
+
+        return {
+            "narrative_reset": narrative_results,
+            "video_reset": video_results
+        }
+
+    def reset_narrative_arc_extraction(self, series: str, season: str, episode: str) -> Dict[str, object]:
+        """Reset ONLY narrative arc extraction: DB records, vector entries, and suggested arcs file."""
+        logger.info(f"Resetting narrative arc extraction for {series} {season} {episode}")
+        
+        # 1. Delete the multiagent suggested arcs file
+        path_handler = PathHandler(series, season, episode, base_dir=self.base_dir)
+        suggested_arcs_path = Path(path_handler.get_suggested_episode_arc_path())
+        if suggested_arcs_path.exists():
+            try:
+                suggested_arcs_path.unlink()
+                logger.info(f"Deleted suggested arcs file: {suggested_arcs_path}")
+            except Exception as e:
+                logger.warning(f"Failed to delete {suggested_arcs_path}: {e}")
+
+        # 2. Delete vector entries
         vector_entries_deleted = self._delete_vector_entries(series, season, episode)
+
+        # 3. Delete DB records (progressions, arcs)
         db_results = self._delete_db_records(series, season, episode)
+
+        # 4. Cleanup character presence
         self._cleanup_character_presence(series, season, episode)
+
+        # 5. Reset status in DB
+        self._set_episode_metadata_status(series, season, episode, analysis_status="not_processed")
 
         return {
             "removed_progression_ids": db_results["removed_progression_ids"],
             "deleted_arc_ids": db_results["deleted_arc_ids"],
             "updated_arc_ids": db_results["updated_arc_ids"],
-            "deleted_artifacts": derived_files_deleted,
             "deleted_vector_entries": vector_entries_deleted,
         }
+
+    def reset_semantic_video_splitting(self, series: str, season: str, episode: str) -> Dict[str, object]:
+        """Reset ONLY semantic video splitting: delete scenes folder and reset status."""
+        logger.info(f"Resetting semantic video splitting for {series} {season} {episode}")
+        
+        # 1. Delete scenes folder
+        self._delete_scenes_folder(series, season, episode)
+
+        # 2. Reset status in DB
+        self._set_episode_metadata_status(series, season, episode, clips_completed=False)
+
+        return {"status": "success"}
+
+    def _set_episode_metadata_status(
+        self, 
+        series: str, 
+        season: str, 
+        episode: str, 
+        analysis_status: str = None, 
+        clips_completed: bool = None
+    ) -> None:
+        """Update episode metadata status fields."""
+        try:
+            from app.models.narrative import EpisodeMetadata, SeasonMetadata
+            with self.db_manager.session_scope() as session:
+                stmt = (
+                    select(EpisodeMetadata)
+                    .join(SeasonMetadata)
+                    .where(SeasonMetadata.series_code == series.upper())
+                    .where(SeasonMetadata.season_code == season.upper())
+                    .where(EpisodeMetadata.episode_code == episode.upper())
+                )
+                db_episode = session.exec(stmt).first()
+                if db_episode:
+                    if analysis_status is not None:
+                        db_episode.analysis_status = analysis_status
+                    if clips_completed is not None:
+                        db_episode.clips_completed = clips_completed
+                    session.add(db_episode)
+                    session.commit()
+                    logger.info(f"Updated metadata status for {series} {season} {episode}")
+        except Exception as e:
+            logger.error(f"Error updating metadata status for {series} {season} {episode}: {e}")
 
     def _delete_all_derived_files(self, series: str, season: str, episode: str) -> List[str]:
         """Delete every file in the episode directory except source files."""
@@ -79,12 +152,19 @@ class EpisodeResetService:
         """Delete all vector store entries for this episode."""
         try:
             collection = self.vector_store_service.collection
-            episode_id = f"{series}_{season}_{episode}"
-            result = collection.get(where={"episode_id": episode_id})
+            # We must filter by the fields that actually exist in the metadata
+            # Progression docs have 'series', 'season', and 'episode'
+            result = collection.get(where={
+                "$and": [
+                    {"series": series},
+                    {"season": season},
+                    {"episode": episode}
+                ]
+            })
             ids_to_delete = result.get("ids", [])
             if ids_to_delete:
                 collection.delete(ids=ids_to_delete)
-                logger.info(f"Deleted {len(ids_to_delete)} vector entries for {episode_id}")
+                logger.info(f"Deleted {len(ids_to_delete)} vector entries for {series} {season} {episode}")
                 return len(ids_to_delete)
         except Exception as e:
             logger.warning(f"Error deleting vector entries for {series} {season} {episode}: {e}")
@@ -219,6 +299,17 @@ class EpisodeResetService:
         except Exception as e:
             logger.error(f"Error cleaning up character presences in DB: {e}")
 
+    def _delete_scenes_folder(self, series: str, season: str, episode: str) -> None:
+        """Delete the 'scenes' folder for the episode."""
+        path_handler = PathHandler(series, season, episode, base_dir=self.base_dir)
+        scenes_dir = Path(path_handler.get_episode_scenes_dir())
+        if scenes_dir.exists() and scenes_dir.is_dir():
+            try:
+                import shutil
+                shutil.rmtree(scenes_dir)
+                logger.info(f"Deleted scenes folder: {scenes_dir}")
+            except Exception as e:
+                logger.warning(f"Failed to delete scenes folder {scenes_dir}: {e}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Reset an episode's analysis artifacts")

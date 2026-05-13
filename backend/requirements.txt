@@ -24,3 +24,8 @@ concurrent-log-handler
 colorlog
 nltk
 python-multipart
+whisperx
+srt
+torch
+torchaudio
+ctranslate2==4.5.0

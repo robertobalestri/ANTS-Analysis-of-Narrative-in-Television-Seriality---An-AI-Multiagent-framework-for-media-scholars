@@ -69,14 +69,16 @@ Return as a JSON array. If no merges needed, return empty array [].""")
         self,
         new_arc: Any,
         existing_arc: Any,
-    ) -> bool:
-        """Decide if two arcs should be merged."""
+    ) -> Dict[str, Any]:
+        """Decide if two arcs should be merged, with confidence and reasoning."""
         arc1 = dict(new_arc) if hasattr(new_arc, '__dict__') and not isinstance(new_arc, dict) else new_arc
         arc2 = dict(existing_arc) if hasattr(existing_arc, '__dict__') and not isinstance(existing_arc, dict) else existing_arc
 
         prompt = ChatPromptTemplate.from_messages([
             ("system", "You are an expert at analyzing narrative arcs in TV series."),
-            ("human", """Should these two narrative arcs be merged into one? Consider:
+            ("human", """Should these two narrative arcs be merged into one? 
+
+Consider:
 - Do they have the same overall story?
 - Do they share main characters?
 - Do they cover the same time period?
@@ -84,17 +86,26 @@ Return as a JSON array. If no merges needed, return empty array [].""")
 Arc 1: {arc1_title} - {arc1_description}
 Arc 2: {arc2_title} - {arc2_description}
 
-Return ONLY 'true' or 'false'.""")
+Return a JSON object with:
+"same_arc": boolean,
+"confidence": float (0.0 to 1.0),
+"reasoning": string (brief explanation)""")
         ])
 
-        chain = prompt | self.llm
-        response = chain.invoke({
-            "arc1_title": arc1.get("title"),
-            "arc1_description": arc1.get("description"),
-            "arc2_title": arc2.get("title"),
-            "arc2_description": arc2.get("description"),
-        })
-        return {"same_arc": response.content.strip().lower() == "true"}
+        def _call():
+            chain = prompt | self.llm
+            response = chain.invoke({
+                "arc1_title": arc1.get("title"),
+                "arc1_description": arc1.get("description"),
+                "arc2_title": arc2.get("title"),
+                "arc2_description": arc2.get("description"),
+            })
+            result = clean_llm_json_response(response.content)
+            if isinstance(result, list) and len(result) > 0:
+                return result[0]
+            return result if isinstance(result, dict) else {}
+
+        return self._retry_on_failure(_call)
 
     def generate_progression_content(
         self,
@@ -156,5 +167,49 @@ Return ONLY the best appellation.""")
                 "known_appellations": known_appellations,
             })
             return clean_llm_text_response(response.content)
+
+        return self._retry_on_failure(_call)
+
+    def evolve_arc_metadata(
+        self,
+        current_title: str,
+        current_description: str,
+        progressions: List[str],
+        new_progression: str,
+    ) -> Dict[str, str]:
+        """Evolve arc title and description based on progression history."""
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", "You are an expert at maintaining the high-level identity of narrative arcs in TV series."),
+            ("human", """As a TV series progresses, a narrative arc's title and overall description might need to evolve.
+For example, a 'Secret Relationship' might just become a 'Relationship' once it's public knowledge.
+
+Current Arc Title: {current_title}
+Current Arc Description: {current_description}
+
+Recent Progressions:
+{progressions_text}
+
+Latest Progression:
+{new_progression}
+
+Based on the cumulative story so far, provide an updated title and overall description for this arc. 
+If the current title and description are still the most accurate summaries, return them unchanged.
+
+Return as JSON with 'title' and 'description' keys.""")
+        ])
+
+        def _call():
+            chain = prompt | self.llm
+            progressions_text = "\n".join([f"- {p}" for p in progressions])
+            response = chain.invoke({
+                "current_title": current_title,
+                "current_description": current_description,
+                "progressions_text": progressions_text,
+                "new_progression": new_progression,
+            })
+            result = clean_llm_json_response(response.content)
+            if isinstance(result, list) and len(result) > 0:
+                return result[0]
+            return result if isinstance(result, dict) else {}
 
         return self._retry_on_failure(_call)

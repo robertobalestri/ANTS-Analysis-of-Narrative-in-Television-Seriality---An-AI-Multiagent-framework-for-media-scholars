@@ -12,7 +12,6 @@ from app.services.processing.entity_extraction import (
     substitute_appellations_with_names,
 )
 from app.models.processing import EntityLink
-from app.services.processing.semantic_processing import semantic_split
 from app.core.logging import setup_logging
 from app.utils.text import clean_text, load_text
 
@@ -93,19 +92,6 @@ async def process_text(path_handler: PathHandler) -> None:
             with open(entity_normalized_plot_path, "r", encoding="utf-8") as entity_normalized_plot_file:
                 entity_normalized_plot = entity_normalized_plot_file.read()
 
-        semantic_segments_path = path_handler.get_semantic_segments_path()
-        if not os.path.exists(semantic_segments_path):
-            logger.info("Performing semantic splitting.")
-            semantic_segments = await semantic_split(text=entity_normalized_plot, llm=llm)
-            with open(semantic_segments_path, "w", encoding="utf-8") as semantic_segments_file:
-                json.dump(semantic_segments, semantic_segments_file, indent=2, ensure_ascii=False)
-                file_tracker.track(semantic_segments_path)
-                logger.info(f"Semantic splitting complete. Results saved to {semantic_segments_path}")
-        else:
-            logger.info(f"Loading semantic segments from: {semantic_segments_path}")
-            with open(semantic_segments_path, "r") as semantic_segments_file:
-                semantic_segments = json.load(semantic_segments_file)
-
         suggested_episode_arc_path = path_handler.get_suggested_episode_arc_path()
         if not os.path.exists(suggested_episode_arc_path):
             file_paths_for_graph = {
@@ -145,7 +131,7 @@ async def process_text(path_handler: PathHandler) -> None:
         raise
 
 
-async def analyze_episode(series: str, season: str, episode: str, base_dir: str = "data") -> None:
+async def run_narrative_arc_extraction_pipeline(series: str, season: str, episode: str, base_dir: str = "data") -> None:
     logger.warning(f"Starting text processing for episode {episode}")
     await process_text(PathHandler(series, season, episode, base_dir=base_dir))
 

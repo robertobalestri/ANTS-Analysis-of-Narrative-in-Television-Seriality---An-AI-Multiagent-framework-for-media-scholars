@@ -1,2 +1,2 @@
 # Pipeline services module
-from app.services.pipeline.analysis_pipeline import process_text, analyze_episode, analyze_series
+from app.services.pipeline.narrative_arc_extraction_pipeline import process_text, run_narrative_arc_extraction_pipeline as analyze_episode, analyze_series

@@ -4,8 +4,11 @@ export interface ExplorerEpisodeStatus {
   episode: string;
   has_plot_file: boolean;
   has_srt_file: boolean;
+  has_video_file: boolean;
+  video_filename?: string;
   has_dialogue_json: boolean;
   has_analysis_artifacts: boolean;
+  has_clips: boolean;
   progression_count: number;
   analysis_status: 'completed' | 'error' | 'pending' | 'not_processed' | 'missing_files';
 }

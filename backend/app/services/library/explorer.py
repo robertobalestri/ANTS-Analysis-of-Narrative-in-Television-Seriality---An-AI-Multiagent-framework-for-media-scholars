@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 from sqlmodel import select
 
 from app.services.ai import get_llm
-from app.services.pipeline.analysis_service import AnalysisService
+from app.services.pipeline.narrative_arc_extraction_service import NarrativeArcExtractionService
 from app.services.library.episode_status import LibraryEpisodeStatusBuilder
 from app.models.narrative import ArcProgression
 from app.repositories import DatabaseSessionManager
@@ -21,7 +21,7 @@ class LibraryExplorerService:
     def __init__(self, base_dir: str = "data"):
         self.base_dir = base_dir
         self.db_manager = DatabaseSessionManager()
-        self.analysis_service = AnalysisService(base_dir=base_dir)
+        self.analysis_service = NarrativeArcExtractionService(base_dir=base_dir)
         self.status_builder = LibraryEpisodeStatusBuilder(base_dir=base_dir)
         self._db_statuses: Optional[Dict[tuple[str, str, str], str]] = None
 
@@ -152,7 +152,7 @@ class LibraryExplorerService:
         finally:
             loop.close()
 
-    async def analyze_episode(self, series_code: str, season_code: str, episode_code: str) -> Dict[str, Any]:
+    async def run_narrative_arc_extraction(self, series_code: str, season_code: str, episode_code: str) -> Dict[str, Any]:
         normalized_series = series_code.upper()
         normalized_season = season_code.upper()
         normalized_episode = episode_code.upper()
@@ -167,7 +167,7 @@ class LibraryExplorerService:
         if status["analysis_status"] not in ("pending", "error"):
             raise ValueError(f"Episode is not ready for analysis (status: {status['analysis_status']})")
 
-        await self.analysis_service.analyze_episode(normalized_series, normalized_season, normalized_episode)
+        await self.analysis_service.run_narrative_arc_extraction(normalized_series, normalized_season, normalized_episode)
         return self._build_episode_status(
             normalized_series,
             normalized_season,
@@ -195,7 +195,7 @@ class LibraryExplorerService:
                 self._db_statuses,
             )
             if status["analysis_status"] in ("pending", "error"):
-                await self.analysis_service.analyze_episode(normalized_series, normalized_season, episode_dir.name)
+                await self.analysis_service.run_narrative_arc_extraction(normalized_series, normalized_season, episode_dir.name)
                 processed_episodes.append(episode_dir.name)
 
         return {
@@ -204,16 +204,19 @@ class LibraryExplorerService:
             "processed_episodes": processed_episodes,
         }
 
-    def _load_episode_db_statuses(self) -> Dict[tuple[str, str, str], str]:
-        """Load episode analysis_status from DB."""
-        statuses: Dict[tuple[str, str, str], str] = {}
+    def _load_episode_db_statuses(self) -> Dict[tuple[str, str, str], Dict[str, Any]]:
+        """Load episode analysis_status and clips_completed from DB."""
+        statuses: Dict[tuple[str, str, str], Dict[str, Any]] = {}
         with self.db_manager.session_scope() as session:
-            from app.models.narrative import EpisodeMetadata, SeasonMetadata
+            from app.models.narrative import EpisodeMetadata
             episodes = session.exec(select(EpisodeMetadata)).all()
             for ep in episodes:
                 if ep.season:
                     series_code = ep.season.series_code
-                    statuses[(series_code, ep.season.season_code, ep.episode_code)] = ep.analysis_status
+                    statuses[(series_code, ep.season.season_code, ep.episode_code)] = {
+                        "analysis_status": ep.analysis_status,
+                        "clips_completed": ep.clips_completed
+                    }
         return statuses
 
     def _build_episode_status(
@@ -222,11 +225,19 @@ class LibraryExplorerService:
         season_code: str,
         episode_code: str,
         progression_counts: Dict[tuple[str, str, str], int],
-        db_statuses: Optional[Dict[tuple[str, str, str], str]] = None,
+        db_statuses: Optional[Dict[tuple[str, str, str], Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         progression_count = progression_counts.get((series_code, season_code, episode_code), 0)
-        db_status = db_statuses.get((series_code, season_code, episode_code)) if db_statuses else None
-        return self.status_builder.build(series_code, season_code, episode_code, progression_count, db_status=db_status)
+        db_info = db_statuses.get((series_code, season_code, episode_code)) if db_statuses else None
+        
+        return self.status_builder.build(
+            series_code, 
+            season_code, 
+            episode_code, 
+            progression_count, 
+            db_status=db_info["analysis_status"] if db_info else None,
+            db_clips_completed=db_info["clips_completed"] if db_info else False
+        )
 
     def _load_progression_counts(self) -> Dict[tuple[str, str, str], int]:
         counts: Dict[tuple[str, str, str], int] = defaultdict(int)
