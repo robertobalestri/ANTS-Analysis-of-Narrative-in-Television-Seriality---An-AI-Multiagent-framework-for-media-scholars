@@ -192,25 +192,3 @@ ENHANCE_AND_VERIFY_ARCS_PROMPT = ChatPromptTemplate.from_template(
 {output_json_format}
 """
 )
-
-# Used by async processors for per-arc season continuity check
-PRESENT_SEASON_ARCS_IDENTIFIER_PROMPT = ChatPromptTemplate.from_template(
-    """You are a narrative continuity analyst. Determine if a known season arc appears in a specific episode.
-
-**Episode Plot:**
-{episode_plot}
-
-**Known Season Arc:**
-- Title: {arc_title}
-- Description: {arc_description}
-
-**Task:**
-Determine if this arc continues or develops in the episode. Return a JSON object with:
-- is_present: true/false
-- title: exact original arc title
-- description: exact original arc description
-- explanation: brief explanation referencing specific events
-
-Return ONLY a JSON object, no explanation or markdown.
-"""
-)

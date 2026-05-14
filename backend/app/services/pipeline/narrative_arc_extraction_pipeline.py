@@ -101,24 +101,11 @@ async def process_text(path_handler: PathHandler) -> None:
                 "season_entities_path": path_handler.get_season_extracted_refined_entities_path(),
                 "suggested_episode_arc_path": suggested_episode_arc_path,
             }
-            logger.info("Extracting narrative arcs.")
-            await extract_narrative_arcs(file_paths_for_graph, series, season, episode)
-
-        # Lazy import to avoid circular imports
-        from app.services.pipeline import suggested_arcs
-        logger.info("Processing suggested arcs and updating database.")
-        updated_arcs = suggested_arcs.process_suggested_arcs(
-            suggested_episode_arc_path,
-            series,
-            season,
-            episode,
-            entity_substituted_plot_path=path_handler.get_entity_normalized_plot_file_path(),
-            season_entities_path=path_handler.get_season_extracted_refined_entities_path()
-        )
-        if updated_arcs is None:
-            updated_arcs = []
-        logger.info(f"Updated {len(updated_arcs)} arcs in the database.")
-        logger.info("Processing complete.")
+            logger.info("Extracting and syncing narrative arcs.")
+            sync_results = await extract_narrative_arcs(file_paths_for_graph, series, season, episode)
+            
+            logger.info(f"Processed {len(sync_results)} arcs in the database via agentic sync.")
+            logger.info("Processing complete.")
 
         # Update episode status to completed
         _update_episode_status(series, season, episode, "completed")

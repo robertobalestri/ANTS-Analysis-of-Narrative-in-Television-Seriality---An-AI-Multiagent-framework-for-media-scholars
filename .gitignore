@@ -22,4 +22,4 @@ implementation_plan.md
 backend/data
 narrative_storage/
 RECAP_SOFTWARE_TO_TAKE_INSPIRATION_FROM/
-*.exe
+backend/bin/
