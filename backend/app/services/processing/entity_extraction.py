@@ -206,33 +206,12 @@ async def extract_and_refine_entities(
 ) -> List[EntityLink]:
     """
     Extract and refine entities from the plot in a single pass.
-    Loads existing entities from season JSON, runs extraction + duplicate resolution,
-    syncs to DB via CharacterService, updates season JSON, and returns refined entities.
+    Loads existing entities from Database, runs extraction + duplicate resolution,
+    syncs to DB via CharacterService, and returns refined entities.
     """
-    # Step 1: Load existing entities from season_entities_path
-    from app.services.filesystem.path_handler import PathHandler
-    base_dir = os.environ.get("DATA_DIR", "data")
-    path_handler = PathHandler(series, season, "E01", base_dir=base_dir)
-    season_entities_path = path_handler.get_season_extracted_refined_entities_path()
-
-    existing_entities: List[EntityLink] = []
-    if os.path.exists(season_entities_path):
-        try:
-            with open(season_entities_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            existing_entities = [
-                EntityLink(
-                    entity_name=item.get("entity_name", ""),
-                    best_appellation=item.get("best_appellation", item.get("entity_name", "")),
-                    appellations=item.get("appellations", []),
-                    presence_episodes=item.get("presence_episodes", []),
-                )
-                for item in data
-            ]
-            logger.info(f"Loaded {len(existing_entities)} existing entities from season file")
-        except (OSError, json.JSONDecodeError) as e:
-            logger.warning(f"Failed to load existing entities from {season_entities_path}: {e}")
-            existing_entities = []
+    # Step 1: Load existing entities from Database
+    existing_entities = load_existing_entities_from_db(series)
+    logger.info(f"Loaded {len(existing_entities)} existing entities from database for series {series}")
 
     # Step 2: Extract entities with detailed prompt (single LLM call)
     refined_entities = await _extract_entities_with_llm(plot, llm, existing_entities)
@@ -255,24 +234,17 @@ async def extract_and_refine_entities(
                 episode_code,
             )
 
-    # Step 5: Update season entities JSON file
-    all_entities: dict = {entity.entity_name: entity for entity in existing_entities}
-    for entity in refined_entities:
-        if entity.entity_name in all_entities:
-            existing_ent = all_entities[entity.entity_name]
-            # Merge presence episodes
-            existing_episodes = set(existing_ent.presence_episodes)
-            existing_episodes.update(entity.presence_episodes)
-            entity.presence_episodes = sorted(list(existing_episodes))
-            # Merge appellations
-            existing_apps = set(existing_ent.appellations)
-            existing_apps.update(entity.appellations)
-            entity.appellations = list(existing_apps)
-        all_entities[entity.entity_name] = entity
-
+    # Step 5: Update season entities JSON file for observability/legacy
+    from app.services.filesystem.path_handler import PathHandler
+    base_dir = os.environ.get("DATA_DIR", "data")
+    path_handler = PathHandler(series, season, "E01", base_dir=base_dir)
+    season_entities_path = path_handler.get_season_extracted_refined_entities_path()
+    
     os.makedirs(os.path.dirname(season_entities_path), exist_ok=True)
     with open(season_entities_path, "w", encoding="utf-8") as f:
-        json.dump([ent.model_dump() for ent in all_entities.values()], f, indent=2, ensure_ascii=False)
+        # Fetch all updated entities from DB to ensure JSON is full
+        all_entities = load_existing_entities_from_db(series)
+        json.dump([ent.model_dump() for ent in all_entities], f, indent=2, ensure_ascii=False)
 
     # Step 6: Return refined entities
     return refined_entities
@@ -309,12 +281,16 @@ def load_existing_entities_from_db(series: str) -> List[EntityLink]:
         characters = character_repo.get_by_series(series)
 
         for char in characters:
-            appellations = [a.appellation for a in char.appellations] if char.appellations else [char.entity_name]
+            appellations = [a.appellation for a in char.appellations]
+            # Ensure best_appellation is in the list
+            if char.best_appellation not in appellations:
+                appellations.append(char.best_appellation)
+                
             entities.append(EntityLink(
                 entity_name=char.entity_name,
-                best_appellation=appellations[0] if appellations else char.entity_name,
+                best_appellation=char.best_appellation,
                 appellations=appellations,
-                presence_episodes=[],
+                presence_episodes=[p.episode_code for p in char.presence_episodes],
             ))
 
     return entities

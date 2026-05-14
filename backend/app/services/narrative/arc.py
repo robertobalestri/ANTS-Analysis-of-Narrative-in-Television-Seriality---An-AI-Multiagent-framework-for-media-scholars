@@ -127,8 +127,11 @@ class NarrativeArcService:
                 logger.info(f"Successfully merged arcs into '{arc1.title}'")
                 return arc1
 
+            except NotFoundError as e:
+                logger.error(f"Not found error during merge: {e}")
+                raise
             except Exception as e:
-                logger.error(f"Error merging arcs: {e}")
+                logger.error(f"Unexpected error merging arcs: {e}")
                 raise
 
     def add_arc(
@@ -179,8 +182,7 @@ class NarrativeArcService:
         arc_data: Dict,
         series: str,
         season: str,
-        episode: str,
-        character_map: Optional[Dict[str, 'Character']] = None
+        episode: str
     ):
         """Handle adding or updating arc progressions."""
         progression_data = arc_data.get('single_episode_progression_string')
@@ -208,13 +210,10 @@ class NarrativeArcService:
                     for name in interfering_chars.split(';')
                     if name.strip()
                 ]
-                if character_map is not None:
-                    interfering_characters = [character_map[name] for name in interfering_names if name in character_map]
-                else:
-                    interfering_characters = self.character_service.get_characters_by_appellations(
-                        interfering_names,
-                        series
-                    )
+                interfering_characters = self.character_service.get_characters_by_appellations(
+                    interfering_names,
+                    series
+                )
                 if interfering_characters:
                     self.character_service.link_characters_to_progression(
                         interfering_characters,
