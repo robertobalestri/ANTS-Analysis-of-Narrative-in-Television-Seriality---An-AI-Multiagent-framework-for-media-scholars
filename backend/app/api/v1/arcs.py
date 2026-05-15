@@ -47,7 +47,7 @@ def get_narrative_service(session):
         arc_repository=NarrativeArcRepository(session),
         progression_repository=ArcProgressionRepository(session),
         character_service=CharacterService(CharacterRepository(session)),
-        llm_service=None,
+        llm_service=LLMService(),
         vector_store_service=VectorStoreService(),
         session=session
     )

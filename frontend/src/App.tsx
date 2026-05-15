@@ -1,4 +1,4 @@
-import React, { useReducer, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   VStack,
@@ -22,119 +22,57 @@ import { AnalysisEnginePanel } from './components/analysis/AnalysisEnginePanel';
 import { LibraryExplorer } from './components/library/LibraryExplorer';
 import { SettingsPanel } from './components/settings/SettingsPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { ApiClient, type RequestOptions } from './services/api/ApiClient';
+import { ApiClient } from './services/api/ApiClient';
 import { isApiSuccess } from './architecture/types/api';
-import type { NarrativeArc, Episode, LibrarySeriesStatus, ExplorerSeries } from './architecture/types';
-
-
-type WorkspaceSection = 'series-manager' | 'analysis-engine' | 'visualization-dashboard' | 'settings';
-
-// --- Consolidated state for series selection across sections ---
-interface SeriesSelectionState {
-  /** Global series selected in the sidebar */
-  selectedSeries: string;
-}
-
-const initialSeriesSelection: SeriesSelectionState = {
-  selectedSeries: '',
-};
-
-type SeriesSelectionAction =
-  | { type: 'SET_SELECTED_SERIES'; payload: string };
-
-function seriesSelectionReducer(
-  state: SeriesSelectionState,
-  action: SeriesSelectionAction,
-): SeriesSelectionState {
-  switch (action.type) {
-    case 'SET_SELECTED_SERIES':
-      return { ...state, selectedSeries: action.payload };
-    default:
-      return state;
-  }
-}
-
-// --- Consolidated state for dashboard data ---
-interface DashboardDataState {
-  episodes: Episode[];
-  arcs: NarrativeArc[];
-  knownSeries: string[];
-  libraryStatus: LibrarySeriesStatus | null;
-}
-
-const initialDashboardData: DashboardDataState = {
-  episodes: [],
-  arcs: [],
-  knownSeries: [],
-  libraryStatus: null,
-};
-
-type DashboardDataAction =
-  | { type: 'SET_EPISODES'; payload: Episode[] }
-  | { type: 'SET_ARCS'; payload: NarrativeArc[] }
-  | { type: 'SET_KNOWN_SERIES'; payload: string[] }
-  | { type: 'SET_LIBRARY_STATUS'; payload: LibrarySeriesStatus | null }
-  | { type: 'CLEAR_DASHBOARD' };
-
-function dashboardDataReducer(
-  state: DashboardDataState,
-  action: DashboardDataAction,
-): DashboardDataState {
-  switch (action.type) {
-    case 'SET_EPISODES':
-      return { ...state, episodes: action.payload };
-    case 'SET_ARCS':
-      return { ...state, arcs: action.payload };
-    case 'SET_KNOWN_SERIES':
-      return { ...state, knownSeries: action.payload };
-    case 'SET_LIBRARY_STATUS':
-      return { ...state, libraryStatus: action.payload };
-    case 'CLEAR_DASHBOARD':
-      return { ...state, episodes: [], arcs: [] };
-    default:
-      return state;
-  }
-}
-
-const api = new ApiClient();
+import type { WorkspaceSection } from './architecture/types';
+import { useWorkspaceStore } from './store/workspaceStore';
+import { useDashboardStore } from './store/dashboardStore';
 
 const App: React.FC = () => {
-  const [seriesSelection, dispatchSeries] = useReducer(seriesSelectionReducer, initialSeriesSelection);
-  const [dashboardData, dispatchDashboard] = useReducer(dashboardDataReducer, initialDashboardData);
-  const [explorerSeries, setExplorerSeries] = useState<ExplorerSeries[]>([]);
-  const [explorerRefreshKey, setExplorerRefreshKey] = useState(0);
-  const [activeSection, setActiveSection] = useState<WorkspaceSection>('series-manager');
+  const {
+    explorerSeries,
+    selectedSeries,
+    activeSection,
+    setSelectedSeries,
+    setActiveSection,
+    fetchExplorerSeries,
+    refreshExplorerData,
+    fetchCharacters
+  } = useWorkspaceStore();
+
+  const {
+    episodes,
+    arcs,
+    libraryStatus,
+    fetchDashboardData,
+    refreshArcs
+  } = useDashboardStore();
+
   const [newSeriesCode, setNewSeriesCode] = useState('');
   const [newSeriesName, setNewSeriesName] = useState('');
   const [isCreatingSeries, setIsCreatingSeries] = useState(false);
+  const [explorerRefreshKey, setExplorerRefreshKey] = useState(0);
 
-  const fetchExplorerSeries = async (signal?: AbortSignal) => {
-    try {
-      const response = await api.request<ExplorerSeries[]>('/library/explorer', { signal });
-      if (isApiSuccess<ExplorerSeries[]>(response)) {
-        setExplorerSeries(response.data);
-        const codes = response.data.map(s => s.code);
-        dispatchDashboard({ type: 'SET_KNOWN_SERIES', payload: codes });
-        
-        // Default selection if none
-        if (!seriesSelection.selectedSeries && response.data.length > 0) {
-          dispatchSeries({ type: 'SET_SELECTED_SERIES', payload: response.data[0].code });
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching explorer series:', error);
-    }
-  };
-
+  // Initialize explorer
   useEffect(() => {
     const controller = new AbortController();
     void fetchExplorerSeries(controller.signal);
     return () => controller.abort();
-  }, []);
+  }, [fetchExplorerSeries]);
+
+  // Fetch dashboard data and characters when selection changes
+  useEffect(() => {
+    if (!selectedSeries) return;
+    const controller = new AbortController();
+    void fetchDashboardData(selectedSeries, controller.signal);
+    void fetchCharacters(selectedSeries, controller.signal);
+    return () => controller.abort();
+  }, [selectedSeries, fetchDashboardData, fetchCharacters]);
 
   const handleCreateSeries = async () => {
     if (!newSeriesCode || !newSeriesName) return;
     setIsCreatingSeries(true);
+    const api = ApiClient.getInstance();
     try {
       const response = await api.createLibrarySeries(newSeriesCode, newSeriesName);
       if (isApiSuccess(response)) {
@@ -147,145 +85,101 @@ const App: React.FC = () => {
     }
   };
 
-  // Fetch data when the selected series changes
-  useEffect(() => {
-    if (!seriesSelection.selectedSeries) {
-      return;
-    }
-
-    const controller = new AbortController();
-    const options: RequestOptions = { signal: controller.signal };
-
-    const fetchData = async () => {
-      try {
-        const [episodesResponse, arcsResponse] = await Promise.all([
-          api.request<Episode[]>(`/episodes/${seriesSelection.selectedSeries}`, options),
-          api.getArcs(seriesSelection.selectedSeries, options)
-        ]);
-
-        if (isApiSuccess<Episode[]>(episodesResponse)) {
-          dispatchDashboard({ type: 'SET_EPISODES', payload: episodesResponse.data });
-        }
-        if (isApiSuccess<NarrativeArc[]>(arcsResponse)) {
-          dispatchDashboard({ type: 'SET_ARCS', payload: arcsResponse.data });
-        }
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        dispatchDashboard({ type: 'CLEAR_DASHBOARD' });
-      }
-    };
-
-    void fetchData();
-
-    return () => controller.abort();
-  }, [seriesSelection.selectedSeries]);
-
-  const handleArcUpdated = async () => {
-    if (seriesSelection.selectedSeries) {
-      try {
-        const response = await api.request<NarrativeArc[]>(`/arcs/series/${seriesSelection.selectedSeries}`);
-        if (isApiSuccess<NarrativeArc[]>(response)) {
-          dispatchDashboard({ type: 'SET_ARCS', payload: response.data });
-        }
-      } catch (error) {
-        console.error('Error refreshing arcs:', error);
-      }
+  const handleArcUpdated = () => {
+    if (selectedSeries) {
+      void refreshArcs(selectedSeries);
     }
   };
 
-  const hasNarrativeData = dashboardData.arcs.length > 0;
+  const handleRefreshExplorer = async () => {
+    await refreshExplorerData();
+    setExplorerRefreshKey(k => k + 1);
+  };
+
+  const hasNarrativeData = arcs.length > 0;
   const emptyStateBg = useColorModeValue('white', 'gray.800');
 
-  const refreshExplorerData = async () => {
-    const response = await api.request<ExplorerSeries[]>('/library/explorer');
-    if (isApiSuccess<ExplorerSeries[]>(response)) {
-      setExplorerSeries(response.data);
-    }
-    setExplorerRefreshKey((current) => current + 1);
-  };
-
   const renderActiveSection = () => {
-    if (activeSection === 'series-manager') {
-      return (
-        <ErrorBoundary>
-          <VStack spacing={4} align="stretch">
-            <LibraryExplorer
-              selectedSeries={seriesSelection.selectedSeries}
-              onSelectSeries={(s) => dispatchSeries({ type: 'SET_SELECTED_SERIES', payload: s })}
-              onDataChange={setExplorerSeries}
-              refreshKey={explorerRefreshKey}
+    switch (activeSection) {
+      case 'series-manager':
+        return (
+          <ErrorBoundary>
+            <VStack spacing={4} align="stretch">
+              <LibraryExplorer
+                selectedSeries={selectedSeries}
+                onSelectSeries={setSelectedSeries}
+                onDataChange={(data) => useWorkspaceStore.getState().setExplorerSeries(data)}
+                refreshKey={explorerRefreshKey}
+              />
+            </VStack>
+          </ErrorBoundary>
+        );
+
+      case 'analysis-engine':
+        return (
+          <ErrorBoundary>
+            <AnalysisEnginePanel
+              seriesList={explorerSeries}
+              selectedSeriesCode={selectedSeries}
+              onSelectSeries={setSelectedSeries}
+              onSelectSeriesManager={() => setActiveSection('series-manager')}
+              onRefresh={handleRefreshExplorer}
             />
-          </VStack>
-        </ErrorBoundary>
-      );
-    }
+          </ErrorBoundary>
+        );
 
-    if (activeSection === 'analysis-engine') {
-      return (
-        <ErrorBoundary>
-          <AnalysisEnginePanel
-            seriesList={explorerSeries}
-            selectedSeriesCode={seriesSelection.selectedSeries}
-            onSelectSeries={(s) => dispatchSeries({ type: 'SET_SELECTED_SERIES', payload: s })}
-            onSelectSeriesManager={() => setActiveSection('series-manager')}
-            onRefresh={refreshExplorerData}
-          />
-        </ErrorBoundary>
-      );
-    }
+      case 'settings':
+        return (
+          <ErrorBoundary>
+            <SettingsPanel />
+          </ErrorBoundary>
+        );
 
-    if (activeSection === 'settings') {
-      return (
-        <ErrorBoundary>
-          <SettingsPanel />
-        </ErrorBoundary>
-      );
-    }
-
-    if (seriesSelection.selectedSeries && (dashboardData.libraryStatus?.analysis_state === 'completed' || hasNarrativeData || (dashboardData.knownSeries.includes(seriesSelection.selectedSeries) && dashboardData.libraryStatus === null))) {
-      return (
-        <ErrorBoundary>
-          <VStack spacing={4} align="stretch">
-            <Box className={styles.tabContainer}>
-              <Tabs isFitted variant="enclosed">
-              <TabList>
-                <Tab>Narrative Arcs Timeline</Tab>
-                <Tab>Vector Store</Tab>
-                <Tab>Characters</Tab>
-              </TabList>
-              <TabPanels>
-                <TabPanel p={0}>
-                  <NarrativeArcManager
-                    series={seriesSelection.selectedSeries}
-                    arcs={dashboardData.arcs}
-                    episodes={dashboardData.episodes}
-                    onArcUpdated={handleArcUpdated}
-                  />
-                </TabPanel>
-                <TabPanel>
-                  <VectorStoreTabManager
-                    series={seriesSelection.selectedSeries}
-                    onArcUpdated={handleArcUpdated}
-                  />
-                </TabPanel>
-                <TabPanel>
-                  <CharacterManager
-                    series={seriesSelection.selectedSeries}
-                    onCharacterUpdated={handleArcUpdated}
-                  />
-                </TabPanel>
-              </TabPanels>
-            </Tabs>
-          </Box>
-        </VStack>
-        </ErrorBoundary>
-      );
+      case 'visualization-dashboard':
+        if (selectedSeries && (libraryStatus?.analysis_state === 'completed' || hasNarrativeData)) {
+          return (
+            <ErrorBoundary>
+              <Box className={styles.tabContainer}>
+                <Tabs isFitted variant="enclosed">
+                  <TabList>
+                    <Tab>Narrative Arcs Timeline</Tab>
+                    <Tab>Vector Store</Tab>
+                    <Tab>Characters</Tab>
+                  </TabList>
+                  <TabPanels>
+                    <TabPanel p={0}>
+                      <NarrativeArcManager
+                        series={selectedSeries}
+                        arcs={arcs}
+                        episodes={episodes}
+                        onArcUpdated={handleArcUpdated}
+                      />
+                    </TabPanel>
+                    <TabPanel>
+                      <VectorStoreTabManager
+                        series={selectedSeries}
+                        onArcUpdated={handleArcUpdated}
+                      />
+                    </TabPanel>
+                    <TabPanel>
+                      <CharacterManager
+                        series={selectedSeries}
+                        onCharacterUpdated={handleArcUpdated}
+                      />
+                    </TabPanel>
+                  </TabPanels>
+                </Tabs>
+              </Box>
+            </ErrorBoundary>
+          );
+        }
+        break;
     }
 
     return (
       <Box textAlign="center" p={8} bg={emptyStateBg} borderRadius="lg" shadow="sm">
         <Text>
-          {seriesSelection.selectedSeries
+          {selectedSeries
             ? 'Select a series with available narrative results to open the Visualization Dashboard.'
             : 'Create or select a series to start building the dataset.'}
         </Text>
@@ -301,42 +195,19 @@ const App: React.FC = () => {
             <Box>
               <Heading size="xs" textTransform="uppercase" color="gray.500" mb={4}>Navigation</Heading>
               <VStack align="stretch" spacing={2}>
-                <Button 
-                  variant={activeSection === 'series-manager' ? 'solid' : 'ghost'} 
-                  colorScheme={activeSection === 'series-manager' ? 'blue' : 'gray'}
-                  onClick={() => setActiveSection('series-manager')}
-                  justifyContent="flex-start"
-                  size="sm"
-                >
-                  Series Manager
-                </Button>
-                <Button 
-                  variant={activeSection === 'analysis-engine' ? 'solid' : 'ghost'} 
-                  colorScheme={activeSection === 'analysis-engine' ? 'blue' : 'gray'}
-                  onClick={() => setActiveSection('analysis-engine')}
-                  justifyContent="flex-start"
-                  size="sm"
-                >
-                  Analysis Engine
-                </Button>
-                <Button 
-                  variant={activeSection === 'visualization-dashboard' ? 'solid' : 'ghost'} 
-                  colorScheme={activeSection === 'visualization-dashboard' ? 'blue' : 'gray'}
-                  onClick={() => setActiveSection('visualization-dashboard')}
-                  justifyContent="flex-start"
-                  size="sm"
-                >
-                  Visualization Dashboard
-                </Button>
-                <Button 
-                  variant={activeSection === 'settings' ? 'solid' : 'ghost'} 
-                  colorScheme={activeSection === 'settings' ? 'blue' : 'gray'}
-                  onClick={() => setActiveSection('settings')}
-                  justifyContent="flex-start"
-                  size="sm"
-                >
-                  Settings
-                </Button>
+                {(['series-manager', 'analysis-engine', 'visualization-dashboard', 'settings'] as WorkspaceSection[]).map((section) => (
+                  <Button
+                    key={section}
+                    variant={activeSection === section ? 'solid' : 'ghost'}
+                    colorScheme={activeSection === section ? 'blue' : 'gray'}
+                    onClick={() => setActiveSection(section)}
+                    justifyContent="flex-start"
+                    size="sm"
+                    textTransform="capitalize"
+                  >
+                    {section.replace('-', ' ')}
+                  </Button>
+                ))}
               </VStack>
             </Box>
 
@@ -373,10 +244,10 @@ const App: React.FC = () => {
                     {explorerSeries.map((s) => (
                       <Button
                         key={s.code}
-                        variant={seriesSelection.selectedSeries === s.code ? 'solid' : 'ghost'}
-                        colorScheme={seriesSelection.selectedSeries === s.code ? 'blue' : 'gray'}
+                        variant={selectedSeries === s.code ? 'solid' : 'ghost'}
+                        colorScheme={selectedSeries === s.code ? 'blue' : 'gray'}
                         size="sm"
-                        onClick={() => dispatchSeries({ type: 'SET_SELECTED_SERIES', payload: s.code })}
+                        onClick={() => setSelectedSeries(s.code)}
                         justifyContent="flex-start"
                         width="100%"
                         px={2}
@@ -389,12 +260,12 @@ const App: React.FC = () => {
               </VStack>
             </Box>
 
-            {seriesSelection.selectedSeries && (
+            {selectedSeries && (
               <Box pt={4} mt="auto">
-                {explorerSeries.find(s => s.code === seriesSelection.selectedSeries)?.poster_url ? (
+                {explorerSeries.find(s => s.code === selectedSeries)?.poster_url ? (
                   <Box borderRadius="md" overflow="hidden" shadow="sm" borderWidth="1px" mb={2}>
                     <img 
-                      src={explorerSeries.find(s => s.code === seriesSelection.selectedSeries)?.poster_url} 
+                      src={explorerSeries.find(s => s.code === selectedSeries)?.poster_url} 
                       alt="Series Poster"
                       style={{ width: '100%', height: 'auto', display: 'block' }}
                     />
@@ -404,7 +275,7 @@ const App: React.FC = () => {
                     No Poster
                   </Box>
                 )}
-                <Text fontSize="xs" color="gray.500" textAlign="center">Selected: {seriesSelection.selectedSeries}</Text>
+                <Text fontSize="xs" color="gray.500" textAlign="center">Selected: {selectedSeries}</Text>
               </Box>
             )}
           </VStack>
@@ -413,7 +284,7 @@ const App: React.FC = () => {
         <Box className={styles.mainContent}>
           <VStack spacing={4} align="stretch">
             <Box className={styles.header} bg={useColorModeValue('white', 'gray.800')}>
-              <Heading className={styles.pageTitle}>Narrative Arcs Dashboard</Heading>
+              <Heading className={styles.pageTitle}>ANTS Analysis of Narrative in Television Seriality</Heading>
             </Box>
             <Box px={4}>{renderActiveSection()}</Box>
           </VStack>

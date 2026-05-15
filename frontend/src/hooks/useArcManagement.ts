@@ -8,7 +8,7 @@ export const useArcManagement = (series: string) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  const api = new ApiClient();
+  const api = ApiClient.getInstance();
 
   const fetchArcs = useCallback(async () => {
     setIsLoading(true);

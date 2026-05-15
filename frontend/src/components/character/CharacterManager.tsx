@@ -48,7 +48,7 @@ export const CharacterManager: React.FC<CharacterManagerProps> = ({
   // Hooks
   const toast = useToast();
   const { request } = useApi();
-  const api = new ApiClient();
+  const api = ApiClient.getInstance();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.600');

@@ -22,7 +22,7 @@ export const handleError = (error: unknown): AppError => {
   return new AppError('An unknown error occurred');
 };
 
-export const isApiError = (error: unknown): error is AppError => {
+export const isAppError = (error: unknown): error is AppError => {
   return error instanceof AppError && !!error.statusCode;
 };
 

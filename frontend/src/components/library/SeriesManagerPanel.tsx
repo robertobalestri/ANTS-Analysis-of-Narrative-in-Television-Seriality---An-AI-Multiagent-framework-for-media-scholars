@@ -43,7 +43,7 @@ interface SeriesManagerPanelProps {
   onRefresh: () => Promise<void>;
 }
 
-const api = new ApiClient();
+const api = ApiClient.getInstance();
 
 export const SeriesManagerPanel: React.FC<SeriesManagerPanelProps> = ({ seriesData, onRefresh }) => {
   const toast = useToast();

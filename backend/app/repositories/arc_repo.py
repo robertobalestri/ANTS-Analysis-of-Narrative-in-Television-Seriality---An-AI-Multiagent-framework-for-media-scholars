@@ -42,7 +42,7 @@ class NarrativeArcRepository(BaseRepository):
 
     def get_by_title(self, title: str, series: str) -> Optional[NarrativeArc]:
         return self.session.query(NarrativeArc)\
-            .filter(func.lower(NarrativeArc.title) == title.lower())\
+            .filter(func.lower(NarrativeArc.title) == title.strip().lower())\
             .filter(NarrativeArc.series == series)\
             .first()
 

@@ -41,7 +41,18 @@ class NarrativeArcService:
 
     @contextmanager
     def transaction(self):
-        """Provide a transactional scope around a series of operations."""
+        """
+        Provide a transactional scope around a series of operations.
+        
+        This context manager ensures that all database operations within the 'with' block
+        are treated as a single atomic unit. If any operation fails, the entire transaction
+        is rolled back to maintain data integrity.
+        
+        Usage:
+            with self.transaction():
+                self.arc_repository.add_or_update(arc)
+                self.progression_service.add_or_update_progression(...)
+        """
         try:
             yield
             self.session.commit()

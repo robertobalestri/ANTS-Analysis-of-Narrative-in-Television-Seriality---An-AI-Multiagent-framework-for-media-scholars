@@ -27,7 +27,7 @@ export const CharacterList: React.FC<CharacterListProps> = ({
 }) => {
   const toast = useToast();
   const { request } = useApi();
-  const api = new ApiClient();
+  const api = ApiClient.getInstance();
 
   // Modals
   const {

@@ -117,7 +117,7 @@ class ArcCreateRequest(BaseModel):
     title: str
     description: str
     arc_type: str
-    main_characters: str
+    main_characters: Union[str, List[str]]
     series: str
     initial_progression: Optional[InitialProgressionData] = None
 

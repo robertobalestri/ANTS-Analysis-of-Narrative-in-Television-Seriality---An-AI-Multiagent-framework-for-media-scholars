@@ -25,13 +25,13 @@ import type {
   NarrativeArc, 
   Episode, 
   ArcProgression, 
-  Character, 
   ProgressionMapping,
   CreateArcData
 } from '@/architecture/types';
 import { ArcProgressionEditModal } from '../modals/ArcProgressionEditModal';
 import { ArcType } from '@/architecture/types/arc';
 import { ArcEditModal } from '../modals/ArcEditModal';
+import { useWorkspaceStore } from '@/store/workspaceStore';
 
 interface NarrativeArcManagerProps {
   series: string;
@@ -47,6 +47,7 @@ export const NarrativeArcManager: React.FC<NarrativeArcManagerProps> = ({
   onArcUpdated,
 }) => {
   // State
+  const { characters } = useWorkspaceStore();
   const [selectedSeason, setSelectedSeason] = useState('');
   const [isMergeMode, setIsMergeMode] = useState(false);
   const [selectedForMerge, setSelectedForMerge] = useState<NarrativeArc[]>([]);
@@ -57,7 +58,6 @@ export const NarrativeArcManager: React.FC<NarrativeArcManagerProps> = ({
   const [selectedArc, setSelectedArc] = useState<NarrativeArc | null>(null);
   const [selectedEpisode, setSelectedEpisode] = useState('');
   const [editingArc, setEditingArc] = useState<NarrativeArc | null>(null);
-  const [characters, setCharacters] = useState<Character[]>([]);
   const [isGenerateAllDialogOpen, setIsGenerateAllDialogOpen] = useState(false);
   const [selectedArcForGeneration, setSelectedArcForGeneration] = useState<NarrativeArc | null>(null);
   const cancelRef = React.useRef<any>(null);
@@ -90,7 +90,7 @@ export const NarrativeArcManager: React.FC<NarrativeArcManagerProps> = ({
 
   const toast = useToast();
   const { request } = useApi();
-  const api = new ApiClient();
+  const api = ApiClient.getInstance();
 
   // Get unique seasons from episodes
   const seasons = React.useMemo(() => {
@@ -104,31 +104,6 @@ export const NarrativeArcManager: React.FC<NarrativeArcManagerProps> = ({
       setSelectedSeason(seasons[0]);
     }
   }, [seasons, selectedSeason]);
-
-  // Fetch characters when component mounts
-  useEffect(() => {
-    if (!series) {
-      return;
-    }
-
-    const controller = new AbortController();
-
-    const fetchCharacters = async () => {
-      try {
-        const response = await request(() => api.getCharacters(series, { signal: controller.signal }));
-        if (response) {
-          const characterList = Array.isArray(response) ? response : [];
-          setCharacters(characterList);
-        }
-      } catch (error) {
-        console.error('Error fetching characters:', error);
-        setCharacters([]);
-      }
-    };
-
-    void fetchCharacters();
-    return () => controller.abort();
-  }, [series]);
 
   // Update the filteredArcs useMemo to include arc type filtering
   const filteredArcs = useMemo(() => {

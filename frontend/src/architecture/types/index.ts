@@ -17,3 +17,4 @@ export type { Character } from './character';
 export type { VectorStoreEntry } from './vector';
 
 export type { ExplorerEpisodeStatus, ExplorerSeason, ExplorerSeries } from './explorer';
+export type { WorkspaceSection } from './workspace';

@@ -32,7 +32,7 @@ interface LibraryExplorerProps {
 }
 
 
-const api = new ApiClient();
+const api = ApiClient.getInstance();
 
 export const LibraryExplorer: React.FC<LibraryExplorerProps> = ({
   selectedSeries,

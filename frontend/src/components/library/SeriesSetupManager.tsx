@@ -36,7 +36,7 @@ interface SeriesSetupManagerProps {
   onStatusChange: (status: LibrarySeriesStatus | null) => void;
 }
 
-const api = new ApiClient();
+const api = ApiClient.getInstance();
 
 export const SeriesSetupManager: React.FC<SeriesSetupManagerProps> = ({
   selectedSeries,

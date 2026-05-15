@@ -1,0 +1,190 @@
+[
+  {
+    "entity_name": "teenage_gastric_bypass_patient",
+    "best_appellation": "Teenage Gastric Bypass Patient",
+    "appellations": [
+      "Teenage Gastric Bypass Patient"
+    ],
+    "presence_episodes": [
+      "S01E07"
+    ]
+  },
+  {
+    "entity_name": "george_omalley",
+    "best_appellation": "George O'Malley",
+    "appellations": [
+      "George",
+      "George O'Malley"
+    ],
+    "presence_episodes": [
+      "S01E07"
+    ]
+  },
+  {
+    "entity_name": "little_girl",
+    "best_appellation": "Little Girl",
+    "appellations": [
+      "Little Girl"
+    ],
+    "presence_episodes": [
+      "S01E07"
+    ]
+  },
+  {
+    "entity_name": "derek_shepherd",
+    "best_appellation": "Derek Shepherd",
+    "appellations": [
+      "Derek",
+      "Derek Shepherd"
+    ],
+    "presence_episodes": [
+      "S01E07"
+    ]
+  },
+  {
+    "entity_name": "merediths_mother",
+    "best_appellation": "Meredith's mother",
+    "appellations": [
+      "Meredith's mother"
+    ],
+    "presence_episodes": [
+      "S01E07"
+    ]
+  },
+  {
+    "entity_name": "mans_girlfriend",
+    "best_appellation": "Man's Girlfriend",
+    "appellations": [
+      "Man's Girlfriend"
+    ],
+    "presence_episodes": [
+      "S01E07"
+    ]
+  },
+  {
+    "entity_name": "cristina_yang",
+    "best_appellation": "Cristina Yang",
+    "appellations": [
+      "Cristina",
+      "Cristina Yang"
+    ],
+    "presence_episodes": [
+      "S01E07"
+    ]
+  },
+  {
+    "entity_name": "miranda_bailey",
+    "best_appellation": "Miranda Bailey",
+    "appellations": [
+      "Miranda Bailey",
+      "Bailey"
+    ],
+    "presence_episodes": [
+      "S01E07"
+    ]
+  },
+  {
+    "entity_name": "gunshot_victims_friend",
+    "best_appellation": "Gunshot Victim's Friend",
+    "appellations": [
+      "Gunshot Victim's Friend"
+    ],
+    "presence_episodes": [
+      "S01E07"
+    ]
+  },
+  {
+    "entity_name": "alex_karev",
+    "best_appellation": "Alex Karev",
+    "appellations": [
+      "Alex Karev",
+      "Alex"
+    ],
+    "presence_episodes": [
+      "S01E07"
+    ]
+  },
+  {
+    "entity_name": "dr_taylor",
+    "best_appellation": "Dr. Taylor",
+    "appellations": [
+      "Dr. Taylor"
+    ],
+    "presence_episodes": [
+      "S01E07"
+    ]
+  },
+  {
+    "entity_name": "teenage_patients_parents",
+    "best_appellation": "Teenage Patient's Parents",
+    "appellations": [
+      "Teenage Patient's Parents"
+    ],
+    "presence_episodes": [
+      "S01E07"
+    ]
+  },
+  {
+    "entity_name": "man_who_swallowed_his_girlfriends_keys",
+    "best_appellation": "Man Who Swallowed His Girlfriend's Keys",
+    "appellations": [
+      "Man Who Swallowed His Girlfriend's Keys"
+    ],
+    "presence_episodes": [
+      "S01E07"
+    ]
+  },
+  {
+    "entity_name": "toddler_with_tremors",
+    "best_appellation": "Toddler With Tremors",
+    "appellations": [
+      "Toddler With Tremors"
+    ],
+    "presence_episodes": [
+      "S01E07"
+    ]
+  },
+  {
+    "entity_name": "preston_burke",
+    "best_appellation": "Preston Burke",
+    "appellations": [
+      "Preston Burke",
+      "Burke"
+    ],
+    "presence_episodes": [
+      "S01E07"
+    ]
+  },
+  {
+    "entity_name": "izzie_stevens",
+    "best_appellation": "Izzie Stevens",
+    "appellations": [
+      "Izzie Stevens",
+      "Izzie"
+    ],
+    "presence_episodes": [
+      "S01E07"
+    ]
+  },
+  {
+    "entity_name": "tattooed_gunshot_victim",
+    "best_appellation": "Tattooed Gunshot Victim",
+    "appellations": [
+      "Tattooed Gunshot Victim"
+    ],
+    "presence_episodes": [
+      "S01E07"
+    ]
+  },
+  {
+    "entity_name": "meredith_grey",
+    "best_appellation": "Meredith Grey",
+    "appellations": [
+      "Meredith Grey",
+      "Meredith"
+    ],
+    "presence_episodes": [
+      "S01E07"
+    ]
+  }
+]

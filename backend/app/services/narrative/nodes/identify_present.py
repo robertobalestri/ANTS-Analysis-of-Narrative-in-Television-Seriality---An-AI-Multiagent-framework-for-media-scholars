@@ -9,6 +9,7 @@ from app.services.ai.models import get_llm
 from app.repositories import DatabaseSessionManager, NarrativeArcRepository
 from app.models.narrative import NarrativeArc
 from app.services.narrative.prompts import IDENTIFY_PRESENT_ARCS_PROMPT
+from app.services.narrative.state import NarrativeArcsExtractionState
 
 logger = setup_logging(__name__)
 llm = get_llm()
@@ -25,7 +26,7 @@ def _arc_to_dict(arc: NarrativeArc) -> Dict:
     }
 
 
-async def identify_present_season_arcs(state: "NarrativeArcsExtractionState") -> "NarrativeArcsExtractionState":
+async def identify_present_season_arcs(state: NarrativeArcsExtractionState) -> NarrativeArcsExtractionState:
     """Identify which existing season arcs are present in the current episode."""
     logger.info("Identifying present season arcs in the episode (batch).")
 

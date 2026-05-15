@@ -13,50 +13,24 @@ from app.models.processing import EntityLink
 from app.models.narrative import Character
 from app.repositories import DatabaseSessionManager
 
+from app.services.narrative.state import (
+    NarrativeArcsExtractionState, 
+    IntermediateNarrativeArc, 
+    ExtractedArcBase
+)
+
+# Node Imports
+from app.services.narrative.nodes.identify_present import identify_present_season_arcs
+from app.services.narrative.nodes.extract_arcs import extract_and_optimize_arcs
+from app.services.narrative.nodes.enhance_arcs import enhance_and_verify_arcs
+from app.services.narrative.nodes.sync_nodes import (
+    search_candidates_node,
+    deduplicate_arc_node,
+    evolve_metadata_node,
+    persist_arc_node,
+)
+
 logger = setup_logging(__name__)
-
-
-# ==============================
-# Models (shared state definitions)
-# ==============================
-
-class IntermediateNarrativeArc(BaseModel):
-    """Model representing an intermediate narrative arc during extraction process."""
-    title: str = Field(..., description="The title of the narrative arc")
-    arc_type: str = Field(..., description="Type of the arc such as 'Soap Arc'/'Genre-Specific Arc'/'Anthology Arc'")
-    description: str = Field(..., description="A brief description of the narrative arc")
-    main_characters: str = Field("", description="Main characters involved in this arc")
-    interfering_episode_characters: str = Field("", description="Interfering characters involved in this arc")
-    single_episode_progression_string: str = Field("", description="The progression of this arc within the episode")
-    matched_id: Optional[str] = Field(None, description="ID of the matching existing arc if already identified")
-
-    model_config = {"populate_by_name": True}
-
-
-class ExtractedArcBase(BaseModel):
-    """Model representing a base extracted arc (title + description + type)."""
-    title: str = Field(..., description="The title of the narrative arc")
-    description: str = Field(..., description="A brief description of the narrative arc")
-    arc_type: str = Field(..., description="Type of the arc such as 'Soap Arc'/'Genre-Specific Arc'/'Anthology Arc'")
-    matched_id: Optional[str] = Field(None, description="ID of the matching existing arc if already identified")
-
-
-class NarrativeArcsExtractionState(TypedDict):
-    """State schema for the narrative arcs extraction graph."""
-    episode_arcs: List[Any]
-    present_season_arcs: List[Dict]
-    season_arcs: List[Dict]
-    file_paths: Dict[str, str]
-    series: str
-    season: str
-    episode: str
-    existing_season_entities: List[Any]
-    episode_plot: str
-    current_sync_index: int
-    dedup_candidates: List[Any]
-    candidate_index: int
-    matched_arc_id: str | None
-    sync_results: List[Dict]
 
 
 # ==============================
@@ -95,21 +69,6 @@ def log_agent_output(agent_name: str, output_data: dict, log_dir: str = "agent_l
         f.write(formatted_json + "\n\n")
 
     logger.info(f"Logged output from {agent_name}")
-
-
-# ==============================
-# Node Imports (from modules)
-# ==============================
-
-from app.services.narrative.nodes.identify_present import identify_present_season_arcs
-from app.services.narrative.nodes.extract_arcs import extract_and_optimize_arcs
-from app.services.narrative.nodes.enhance_arcs import enhance_and_verify_arcs
-from app.services.narrative.nodes.sync_nodes import (
-    search_candidates_node,
-    deduplicate_arc_node,
-    evolve_metadata_node,
-    persist_arc_node,
-)
 
 
 # ==============================

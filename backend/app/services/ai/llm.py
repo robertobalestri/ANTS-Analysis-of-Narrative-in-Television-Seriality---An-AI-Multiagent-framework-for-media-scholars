@@ -16,9 +16,9 @@ logger = setup_logging(__name__)
 class LLMService:
     """Service for LLM interactions with retry logic."""
 
-    def __init__(self, max_retries: int = 3, retry_delay: float = 1.0):
-        self.max_retries = max_retries
-        self.retry_delay = retry_delay
+    def __init__(self, max_retries: Optional[int] = None, retry_delay: Optional[float] = None):
+        self.max_retries = max_retries or int(os.getenv("LLM_RETRY_MAX_ATTEMPTS", 3))
+        self.retry_delay = retry_delay or float(os.getenv("LLM_RETRY_BASE_DELAY_SECONDS", 1.0))
         self._llm = None
 
     @property

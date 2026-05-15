@@ -42,7 +42,7 @@ export const VectorStoreTabManager: React.FC<VectorStoreTabManagerProps> = ({
   // API hooks
   const toast = useToast();
   const { request, isLoading } = useApi();
-  const api = new ApiClient();
+  const api = ApiClient.getInstance();
 
   // Fetch entries when series changes
   useEffect(() => {

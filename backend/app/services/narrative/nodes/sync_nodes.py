@@ -9,6 +9,7 @@ from app.services.narrative.arc import NarrativeArcService
 from app.services.narrative.character import CharacterService
 from app.models.narrative import NarrativeArc
 from app.utils.text import save_json
+from app.services.narrative.state import NarrativeArcsExtractionState
 
 logger = setup_logging(__name__)
 
@@ -24,7 +25,7 @@ def _arc_to_dict(arc: NarrativeArc) -> Dict:
     }
 
 
-async def search_candidates_node(state: "NarrativeArcsExtractionState") -> "NarrativeArcsExtractionState":
+async def search_candidates_node(state: NarrativeArcsExtractionState) -> NarrativeArcsExtractionState:
     """Find potential matching arcs for the current extracted arc."""
     if state['current_sync_index'] >= len(state['episode_arcs']):
         return state
@@ -85,7 +86,7 @@ async def search_candidates_node(state: "NarrativeArcsExtractionState") -> "Narr
     return state
 
 
-async def deduplicate_arc_node(state: "NarrativeArcsExtractionState") -> "NarrativeArcsExtractionState":
+async def deduplicate_arc_node(state: NarrativeArcsExtractionState) -> NarrativeArcsExtractionState:
     """Evaluate a single candidate for merging."""
     if state['candidate_index'] >= len(state['dedup_candidates']):
         return state
@@ -130,7 +131,7 @@ async def deduplicate_arc_node(state: "NarrativeArcsExtractionState") -> "Narrat
     return state
 
 
-async def evolve_metadata_node(state: "NarrativeArcsExtractionState") -> "NarrativeArcsExtractionState":
+async def evolve_metadata_node(state: NarrativeArcsExtractionState) -> NarrativeArcsExtractionState:
     """Decide on the final Title and Description for the arc."""
     current_arc = state['episode_arcs'][state['current_sync_index']]
     matched_arc_id = state['matched_arc_id']
@@ -179,7 +180,7 @@ async def evolve_metadata_node(state: "NarrativeArcsExtractionState") -> "Narrat
     return state
 
 
-async def persist_arc_node(state: "NarrativeArcsExtractionState") -> "NarrativeArcsExtractionState":
+async def persist_arc_node(state: NarrativeArcsExtractionState) -> NarrativeArcsExtractionState:
     """Commit the arc and its progression to the database and vector store."""
     if state['current_sync_index'] >= len(state['episode_arcs']) or not state['sync_results']:
         return state

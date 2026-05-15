@@ -3,7 +3,7 @@ import json
 from app.utils.llm import clean_llm_json_response
 from app.core.logging import setup_logging
 from app.services.ai.models import get_llm
-from app.services.narrative.graph import ExtractedArcBase
+from app.services.narrative.state import ExtractedArcBase, NarrativeArcsExtractionState
 from app.services.narrative.prompts import (
     EXTRACT_AND_OPTIMIZE_ARCS_PROMPT,
     DETAILED_OUTPUT_JSON_FORMAT,
@@ -14,7 +14,7 @@ logger = setup_logging(__name__)
 llm = get_llm()
 
 
-async def extract_and_optimize_arcs(state: "NarrativeArcsExtractionState") -> "NarrativeArcsExtractionState":
+async def extract_and_optimize_arcs(state: NarrativeArcsExtractionState) -> NarrativeArcsExtractionState:
     """Extract and optimize all arcs in a single comprehensive pass."""
     logger.info("Extracting and optimizing all arcs in single pass.")
 

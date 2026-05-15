@@ -52,7 +52,7 @@ export const ArcProgressionEditModal: React.FC<ArcProgressionEditModalProps> = (
   const [arcTitle, setArcTitle] = useState<string>('');
   const bgColor = useColorModeValue('gray.50', 'gray.700');
   const toast = useToast();
-  const api = new ApiClient();
+  const api = ApiClient.getInstance();
 
   useEffect(() => {
     if (progression) {

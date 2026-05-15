@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Badge, Box, Button, HStack, Select, SimpleGrid, Text, VStack, useToast, IconButton } from '@chakra-ui/react';
 import { DeleteIcon } from '@chakra-ui/icons';
 import { ApiClient } from '@/services/api/ApiClient';
@@ -15,7 +15,7 @@ interface AnalysisEnginePanelProps {
   onRefresh?: () => Promise<void>;
 }
 
-const api = new ApiClient();
+const api = ApiClient.getInstance();
 
 export const AnalysisEnginePanel: React.FC<AnalysisEnginePanelProps> = ({
   seriesList,
@@ -49,14 +49,6 @@ export const AnalysisEnginePanel: React.FC<AnalysisEnginePanelProps> = ({
 
   const seasonCount = seriesData.seasons?.length ?? 0;
   const episodeCount = seriesData.seasons?.reduce((total, season) => total + season.episodes.length, 0) ?? 0;
-  const plotReadyCount = seriesData.seasons?.reduce(
-    (total, season) => total + season.episodes.filter((episode) => episode.analysis_status === 'pending').length,
-    0
-  ) ?? 0;
-  const subtitleOnlyCount = seriesData.seasons?.reduce(
-    (total, season) => total + season.episodes.filter((episode) => episode.analysis_status === 'not_processed').length,
-    0
-  ) ?? 0;
   const processedCount = seriesData.seasons?.reduce(
     (total, season) => total + season.episodes.filter((episode) => episode.analysis_status === 'completed').length,
     0

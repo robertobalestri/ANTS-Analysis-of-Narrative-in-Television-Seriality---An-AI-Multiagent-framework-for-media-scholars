@@ -59,7 +59,7 @@ export const NewArcModal: React.FC<NewArcModalProps> = ({
   const [progressionEpisode, setProgressionEpisode] = useState('');
   const [interferingCharacters, setInterferingCharacters] = useState<string[]>([]);
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
-  const api = new ApiClient();
+  const api = ApiClient.getInstance();
   const [, setActiveTab] = useState(0);
 
   const handleSubmit = () => {

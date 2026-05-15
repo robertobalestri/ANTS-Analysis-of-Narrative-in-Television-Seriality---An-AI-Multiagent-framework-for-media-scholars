@@ -28,7 +28,7 @@ interface EnvVar {
   required: boolean;
 }
 
-const api = new ApiClient();
+const api = ApiClient.getInstance();
 
 export const SettingsPanel: React.FC = () => {
   const [envVars, setEnvVars] = useState<EnvVar[]>([]);

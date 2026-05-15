@@ -3,7 +3,7 @@ import json
 from app.utils.llm import clean_llm_json_response
 from app.core.logging import setup_logging
 from app.services.ai.models import get_llm
-from app.services.narrative.graph import IntermediateNarrativeArc
+from app.services.narrative.state import IntermediateNarrativeArc, NarrativeArcsExtractionState
 from app.services.narrative.prompts import (
     ENHANCE_AND_VERIFY_ARCS_PROMPT,
     DETAILED_OUTPUT_JSON_FORMAT,
@@ -14,7 +14,7 @@ logger = setup_logging(__name__)
 llm = get_llm()
 
 
-async def enhance_and_verify_arcs(state: "NarrativeArcsExtractionState") -> "NarrativeArcsExtractionState":
+async def enhance_and_verify_arcs(state: NarrativeArcsExtractionState) -> NarrativeArcsExtractionState:
     """Enhance arcs with characters and progression, then verify — single LLM call."""
     logger.info("Enhancing and verifying all arcs (single pass).")
 

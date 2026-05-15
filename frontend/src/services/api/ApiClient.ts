@@ -9,7 +9,8 @@ import type {
   LibrarySeriesSummary,
   LibrarySeriesStatus
 } from '@/architecture/types';
-import { isApiError } from '@/architecture/types/api';
+import { isApiError, isApiSuccess } from '@/architecture/types/api';
+import { config } from '@/config/environment';
 
 // Add interface for arc creation data
 interface ArcCreateData extends Omit<Partial<NarrativeArc>, 'progressions' | 'main_characters'> {
@@ -44,59 +45,86 @@ interface CreateProgressionData {
 }
 
 export class ApiClient {
+  private static instance: ApiClient;
   private baseUrl: string;
 
-  constructor(baseUrl: string = '/api') {
+  private constructor(baseUrl: string = config.apiUrl) {
     this.baseUrl = baseUrl;
   }
 
-  public async request<T>(endpoint: string, options: RequestOptions = {}): Promise<ApiResponse<T>> {
-    try {
-      const headers = new Headers(options.headers ?? {});
-      if (!headers.has('Accept')) {
-        headers.set('Accept', 'application/json');
-      }
-      if (!(options.body instanceof FormData) && !headers.has('Content-Type')) {
-        headers.set('Content-Type', 'application/json');
-      }
-
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
-        ...options,
-        headers,
-      });
-
-      if (!response.ok) {
-        let detail = `HTTP error! status: ${response.status}`;
-        try {
-          const errorBody = await response.json();
-          if (typeof errorBody?.detail === 'string') {
-            detail = errorBody.detail;
-          }
-        } catch {
-          // Keep the generic HTTP status message when no JSON detail is available.
-        }
-        throw new Error(detail);
-      }
-
-      const data = await response.json();
-      return { data };
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        return { error: 'Request cancelled' };
-      }
-
-      return {
-        error: error instanceof Error ? error.message : 'Unknown error occurred'
-      };
+  public static getInstance(): ApiClient {
+    if (!ApiClient.instance) {
+      ApiClient.instance = new ApiClient();
     }
+    return ApiClient.instance;
+  }
+
+  public async request<T>(endpoint: string, options: RequestOptions = {}): Promise<ApiResponse<T>> {
+    let retries = 0;
+    const maxRetries = 2;
+    const retryDelay = 1000;
+
+    const performRequest = async (): Promise<ApiResponse<T>> => {
+      try {
+        const headers = new Headers(options.headers ?? {});
+        if (!headers.has('Accept')) {
+          headers.set('Accept', 'application/json');
+        }
+        if (!(options.body instanceof FormData) && !headers.has('Content-Type')) {
+          headers.set('Content-Type', 'application/json');
+        }
+
+        const response = await fetch(`${this.baseUrl}${endpoint}`, {
+          ...options,
+          headers,
+        });
+
+        if (!response.ok) {
+          let detail = `HTTP error! status: ${response.status}`;
+          try {
+            const errorBody = await response.json();
+            if (typeof errorBody?.detail === 'string') {
+              detail = errorBody.detail;
+            }
+          } catch {
+            // Keep the generic HTTP status message when no JSON detail is available.
+          }
+          throw new Error(detail);
+        }
+
+        const data = await response.json();
+        return { data };
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return { error: 'Request cancelled' };
+        }
+
+        if (retries < maxRetries && !(error instanceof DOMException && error.name === 'AbortError')) {
+          retries++;
+          await new Promise(resolve => setTimeout(resolve, retryDelay * retries));
+          return performRequest();
+        }
+
+        return {
+          error: error instanceof Error ? error.message : 'Unknown error occurred'
+        };
+      }
+    };
+
+    return performRequest();
   }
 
   async getLibrarySeries(options?: RequestOptions): Promise<ApiResponse<LibrarySeriesSummary[]>> {
     return this.request<LibrarySeriesSummary[]>('/library/series', options);
   }
 
+  // DEPRECATED: use getLibrarySeries
   async getSeries(options?: RequestOptions): Promise<ApiResponse<string[]>> {
-    return this.request<string[]>('/library/series', options);
+    const response = await this.getLibrarySeries(options);
+    if (isApiSuccess<LibrarySeriesSummary[]>(response)) {
+      return { data: response.data.map(s => s.code) };
+    }
+    return response as ApiResponse<string[]>;
   }
 
   async createLibrarySeries(code: string, displayName: string): Promise<ApiResponse<LibrarySeriesStatus>> {
@@ -501,4 +529,5 @@ export class ApiClient {
       };
     }
   }
-} 
+}
+ 
