@@ -18,6 +18,7 @@ import {
   NumberIncrementStepper,
   NumberDecrementStepper,
   Select,
+  Checkbox,
   useDisclosure,
   Modal,
   ModalOverlay,
@@ -82,10 +83,11 @@ export const ArcClusterVisualizer: React.FC<ArcClusterVisualizerProps> = ({
   const { isOpen: isClusterOpen, onOpen: onClusterOpen, onClose: onClusterClose } = useDisclosure();
 
   // State hooks
-  const [clusterThreshold, setClusterThreshold] = useState<number>(0.75);
+  const [clusterThreshold, setClusterThreshold] = useState<number>(0.10);
   const [minClusterSize, setMinClusterSize] = useState<number>(2);
   const [maxClusters, setMaxClusters] = useState<number>(20);
   const [colorScheme, setColorScheme] = useState<string>('Set1');
+  const [excludeAnthology, setExcludeAnthology] = useState<boolean>(true);
   const [clusterVisualization, setClusterVisualization] =
     useState<ClusterVisualizationData | null>(null);
   const [selectedCluster, setSelectedCluster] = useState<ArcCluster | null>(null);
@@ -135,9 +137,8 @@ export const ArcClusterVisualizer: React.FC<ArcClusterVisualizerProps> = ({
       z: pcaResult.map((p) => p[2]),
       text: arcEmbeddings.map((entry) => {
         const arc = allArcs.find((a) => a.id === entry.id);
-        return `Title: ${arc?.title}<br>Cluster: ${arc?.cluster_id}<br>Probability: ${
-          (arc?.cluster_probability || 0) * 100
-        }%`;
+        return `Title: ${arc?.title}<br>Cluster: ${arc?.cluster_id}<br>Probability: ${(arc?.cluster_probability || 0) * 100
+          }%`;
       }),
       cluster: arcEmbeddings.map(
         (entry) => allArcs.find((a) => a.id === entry.id)?.cluster_id || 0
@@ -249,6 +250,7 @@ export const ArcClusterVisualizer: React.FC<ArcClusterVisualizerProps> = ({
       threshold: clusterThreshold,
       minClusterSize: minClusterSize,
       maxClusters: maxClusters,
+      excludeArcTypes: excludeAnthology ? 'Anthology Arc' : undefined,
     });
   };
 
@@ -321,6 +323,12 @@ export const ArcClusterVisualizer: React.FC<ArcClusterVisualizerProps> = ({
                   </option>
                 ))}
               </Select>
+            </FormControl>
+
+            <FormControl>
+              <Checkbox isChecked={excludeAnthology} onChange={(e) => setExcludeAnthology(e.target.checked)}>
+                Exclude Anthology Arcs
+              </Checkbox>
             </FormControl>
 
             <Button colorScheme="blue" onClick={handleRecalculateClusters} isLoading={isLoading}>

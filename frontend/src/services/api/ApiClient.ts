@@ -418,6 +418,7 @@ export class ApiClient {
       threshold?: number;
       min_cluster_size?: number;
       max_clusters?: number;
+      exclude_arc_types?: string;
     } = {},
     options?: RequestOptions
   ): Promise<ApiResponse<ArcCluster[]>> {
@@ -425,6 +426,7 @@ export class ApiClient {
     if (params.threshold) queryParams.append('threshold', params.threshold.toString());
     if (params.min_cluster_size) queryParams.append('min_cluster_size', params.min_cluster_size.toString());
     if (params.max_clusters) queryParams.append('max_clusters', params.max_clusters.toString());
+    if (params.exclude_arc_types) queryParams.append('exclude_arc_types', params.exclude_arc_types);
 
     const endpoint = `/vector-store/${series}/clusters${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
     return this.request<ArcCluster[]>(endpoint, options);

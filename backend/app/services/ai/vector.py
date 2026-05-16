@@ -212,12 +212,16 @@ class VectorStoreService:
         series: str,
         min_cluster_size: int = 2,
         min_samples: int = 1,
-        cluster_selection_epsilon: float = 0.0
+        cluster_selection_epsilon: float = 0.0,
+        exclude_arc_types: Optional[List[str]] = None
     ) -> List[Dict]:
         """Find clusters of similar arcs using HDBSCAN clustering."""
         try:
+            where_clauses = [{"series": series}, {"doc_type": "main"}]
+            if exclude_arc_types:
+                where_clauses.append({"arc_type": {"$nin": exclude_arc_types}})
             results = self.collection.get(
-                where={"$and": [{"series": series}, {"doc_type": "main"}]},
+                where={"$and": where_clauses},
                 include=['metadatas', 'embeddings']
             )
 

@@ -95,13 +95,15 @@ export const VectorStoreTabManager: React.FC<VectorStoreTabManagerProps> = ({
     threshold: number;
     minClusterSize: number;
     maxClusters: number;
+    excludeArcTypes?: string;
   }, signal?: AbortSignal) => {
     try {
       const response = await request(() =>
         api.getArcClusters(series, {
-          threshold: options?.threshold || 0.75,
+          threshold: options?.threshold ?? 0.10,
           min_cluster_size: options?.minClusterSize || 2,
           max_clusters: options?.maxClusters || 20,
+          exclude_arc_types: options?.excludeArcTypes ?? 'Anthology Arc',
         }, { signal })
       );
 

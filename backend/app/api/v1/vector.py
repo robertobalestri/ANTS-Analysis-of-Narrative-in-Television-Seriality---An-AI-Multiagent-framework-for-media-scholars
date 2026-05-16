@@ -97,15 +97,18 @@ async def get_clusters_by_series(
     series: str,
     threshold: float = Query(0.0),
     min_cluster_size: int = Query(2),
-    max_clusters: Optional[int] = Query(None)
+    max_clusters: Optional[int] = Query(None),
+    exclude_arc_types: Optional[str] = Query(None)
 ):
     """Get clusters of similar arcs for a series."""
+    exclude_types = [t.strip() for t in exclude_arc_types.split(",")] if exclude_arc_types else None
     try:
         vector_service = VectorStoreService()
         clusters = vector_service.find_similar_arcs_clusters(
             series=series,
             min_cluster_size=min_cluster_size,
-            cluster_selection_epsilon=threshold
+            cluster_selection_epsilon=threshold,
+            exclude_arc_types=exclude_types
         )
         if max_clusters:
             clusters = clusters[:max_clusters]
