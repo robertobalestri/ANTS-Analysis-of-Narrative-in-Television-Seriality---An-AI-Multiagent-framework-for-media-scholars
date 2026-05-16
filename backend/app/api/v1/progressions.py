@@ -191,23 +191,23 @@ async def generate_progression(
 
             arc = None
             arc_title = None
-            arc_description = None
+            arc_type = None
 
             if data.get('arc_id'):
                 arc = arc_repository.get_by_id(data['arc_id'])
                 if arc:
                     arc_title = arc.title
-                    arc_description = arc.description
+                    arc_type = arc.arc_type
             else:
                 arc_title = data.get('arc_title')
-                arc_description = data.get('arc_description')
+                arc_type = data.get('arc_description')
 
-            if not arc_title or not arc_description:
+            if not arc_title or not arc_type:
                 return {"content": "", "interfering_characters": []}
 
             content = llm_service.generate_progression_content(
                 arc_title=arc_title,
-                arc_description=arc_description,
+                arc_type=arc_type,
                 season=season,
                 episode=episode
             )

@@ -30,6 +30,20 @@ interface VectorStoreExplorerProps {
   isLoading: boolean;
 }
 
+interface VectorMetadata {
+  season?: string;
+  episode?: string;
+  doc_type?: string;
+  title?: string;
+  arc_type?: string;
+  main_characters?: string[];
+  main_arc_id?: string;
+  progression_title?: string;
+  arc_title?: string;
+  interfering_characters?: string[];
+  [key: string]: unknown;
+}
+
 export const VectorStoreExplorer: React.FC<VectorStoreExplorerProps> = ({
   entries,
   isLoading,
@@ -54,11 +68,12 @@ export const VectorStoreExplorer: React.FC<VectorStoreExplorerProps> = ({
       const episodes = new Set<string>();
 
       entries.forEach((entry) => {
-        if (entry.metadata.season) {
-          seasons.add(entry.metadata.season);
+        const m = entry.metadata as VectorMetadata;
+        if (m.season) {
+          seasons.add(m.season);
         }
-        if (entry.metadata.episode) {
-          episodes.add(entry.metadata.episode);
+        if (m.episode) {
+          episodes.add(m.episode);
         }
       });
 
@@ -71,8 +86,9 @@ export const VectorStoreExplorer: React.FC<VectorStoreExplorerProps> = ({
     if (selectedSeason && entries.length > 0) {
       const episodesInSeason = new Set<string>();
       entries.forEach((entry) => {
-        if (entry.metadata.season === selectedSeason && entry.metadata.episode) {
-          episodesInSeason.add(entry.metadata.episode);
+        const m = entry.metadata as VectorMetadata;
+        if (m.season === selectedSeason && m.episode) {
+          episodesInSeason.add(m.episode);
         }
       });
       setAvailableEpisodes(Array.from(episodesInSeason).sort());
@@ -86,6 +102,14 @@ export const VectorStoreExplorer: React.FC<VectorStoreExplorerProps> = ({
   }, [entries, showOnlyMainArcs, selectedSeason, selectedEpisode]);
 
   // Helper functions and constants
+  const getMeta = (entry: VectorStoreEntry): VectorMetadata =>
+    entry.metadata as VectorMetadata;
+
+  const formatEp = (entry: VectorStoreEntry) => {
+    const m = getMeta(entry);
+    return `S${(m.season ?? '').replace('S', '')}-E${(m.episode ?? '').replace('E', '')}`;
+  };
+
   const getArcTypeColor = (arcType: ArcType): string => {
     const colors = {
       [ArcType.SoapArc]: 'pink',
@@ -135,8 +159,8 @@ export const VectorStoreExplorer: React.FC<VectorStoreExplorerProps> = ({
 
     try {
       // Separate main arcs and progressions
-      const mainArcs = data.filter((entry) => entry.metadata.doc_type === 'main');
-      let progressions = data.filter((entry) => entry.metadata.doc_type !== 'main');
+      const mainArcs = data.filter((entry) => getMeta(entry).doc_type === 'main');
+      let progressions = data.filter((entry) => getMeta(entry).doc_type !== 'main');
 
       // Apply season/episode filters to progressions
       if (filterSeason || filterEpisode) {
@@ -304,20 +328,20 @@ export const VectorStoreExplorer: React.FC<VectorStoreExplorerProps> = ({
         <VStack spacing={4} align="stretch">
           <Accordion allowMultiple defaultIndex={[]}>
             {entries
-              .filter((entry) => entry.metadata.doc_type === 'main')
+              .filter((entry) => getMeta(entry).doc_type === 'main')
               .map((mainArc: VectorStoreEntry) => (
                 <AccordionItem key={mainArc.id}>
                   <AccordionButton>
                     <Box flex="1" textAlign="left">
                       <HStack spacing={2}>
-                        <Badge colorScheme={getArcTypeColor(mainArc.metadata.arc_type as ArcType)}>
-                          {mainArc.metadata.arc_type}
+                        <Badge colorScheme={getArcTypeColor(getMeta(mainArc).arc_type as ArcType)}>
+                          {getMeta(mainArc).arc_type}
                         </Badge>
-                        <Text fontWeight="bold">{mainArc.metadata.title}</Text>
-                        {mainArc.metadata.main_characters &&
-                          Array.isArray(mainArc.metadata.main_characters) && (
+                        <Text fontWeight="bold">{getMeta(mainArc).title}</Text>
+                        {getMeta(mainArc).main_characters &&
+                          Array.isArray(getMeta(mainArc).main_characters) && (
                             <Text fontSize="sm" color="gray.500">
-                              Main Characters: {mainArc.metadata.main_characters.join(', ')}
+                              Main Characters: {getMeta(mainArc).main_characters!.join(', ')}
                             </Text>
                           )}
                       </HStack>
@@ -329,11 +353,11 @@ export const VectorStoreExplorer: React.FC<VectorStoreExplorerProps> = ({
                       {/* Main Arc Content */}
                       <Box pl={4} borderLeft="2px" borderColor="gray.200">
                         <Text>{mainArc.content}</Text>
-                        {mainArc.metadata.main_characters &&
-                          Array.isArray(mainArc.metadata.main_characters) && (
+                        {getMeta(mainArc).main_characters &&
+                          Array.isArray(getMeta(mainArc).main_characters) && (
                             <HStack mt={2}>
                               <Text fontWeight="bold">Main Characters:</Text>
-                              <Text>{mainArc.metadata.main_characters.join(', ')}</Text>
+                              <Text>{getMeta(mainArc).main_characters!.join(', ')}</Text>
                             </HStack>
                           )}
                       </Box>
@@ -346,28 +370,24 @@ export const VectorStoreExplorer: React.FC<VectorStoreExplorerProps> = ({
                         <VStack align="stretch" spacing={2}>
                           {entries
                             .filter(
-                              (entry) =>
-                                entry.metadata.doc_type !== 'main' &&
-                                entry.metadata.main_arc_id === mainArc.id
+                              (entry) => {
+                                const m = getMeta(entry);
+                                return m.doc_type !== 'main' && m.main_arc_id === mainArc.id;
+                              }
                             )
                             .sort((a, b) => {
-                              const seasonA = parseInt(
-                                a.metadata.season?.replace('S', '') || '0'
-                              );
-                              const seasonB = parseInt(
-                                b.metadata.season?.replace('S', '') || '0'
-                              );
+                              const ma = getMeta(a);
+                              const mb = getMeta(b);
+                              const seasonA = parseInt((ma.season ?? '').replace('S', '') || '0');
+                              const seasonB = parseInt((mb.season ?? '').replace('S', '') || '0');
                               if (seasonA !== seasonB) return seasonA - seasonB;
-
-                              const episodeA = parseInt(
-                                a.metadata.episode?.replace('E', '') || '0'
-                              );
-                              const episodeB = parseInt(
-                                b.metadata.episode?.replace('E', '') || '0'
-                              );
+                              const episodeA = parseInt((ma.episode ?? '').replace('E', '') || '0');
+                              const episodeB = parseInt((mb.episode ?? '').replace('E', '') || '0');
                               return episodeA - episodeB;
                             })
-                            .map((progression: VectorStoreEntry) => (
+                            .map((progression: VectorStoreEntry) => {
+                              const pm = getMeta(progression);
+                              return (
                               <Box
                                 key={progression.id}
                                 p={3}
@@ -378,8 +398,7 @@ export const VectorStoreExplorer: React.FC<VectorStoreExplorerProps> = ({
                                 <VStack align="stretch" spacing={2}>
                                   <HStack justify="space-between">
                                     <Badge colorScheme="purple">
-                                      S{progression.metadata.season?.replace('S', '')}-
-                                      E{progression.metadata.episode?.replace('E', '')}
+                                      {formatEp(progression)}
                                     </Badge>
                                     {progression.distance !== undefined && (
                                       <Badge colorScheme="green">
@@ -388,23 +407,21 @@ export const VectorStoreExplorer: React.FC<VectorStoreExplorerProps> = ({
                                     )}
                                   </HStack>
                                   <Text>{progression.content}</Text>
-                                  {progression.metadata.interfering_characters &&
-                                    Array.isArray(
-                                      progression.metadata.interfering_characters
-                                    ) &&
-                                    progression.metadata.interfering_characters.length > 0 && (
+                                  {pm.interfering_characters &&
+                                    Array.isArray(pm.interfering_characters) &&
+                                    pm.interfering_characters.length > 0 && (
                                       <HStack>
                                         <Text fontWeight="bold" fontSize="sm">
                                           Interfering Characters:
                                         </Text>
                                         <Text fontSize="sm">
-                                          {progression.metadata.interfering_characters.join(', ')}
+                                          {pm.interfering_characters.join(', ')}
                                         </Text>
                                       </HStack>
                                     )}
                                 </VStack>
                               </Box>
-                            ))}
+                            );})}
                         </VStack>
                       </Box>
                     </VStack>

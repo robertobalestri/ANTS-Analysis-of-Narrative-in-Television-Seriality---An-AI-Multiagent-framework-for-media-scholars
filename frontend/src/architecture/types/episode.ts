@@ -1,4 +1,2 @@
-export interface Episode {
-  season: string;
-  episode: string;
-} 
+/* Episode types re-exported from shared/ */
+export type { Episode } from 'shared/types';

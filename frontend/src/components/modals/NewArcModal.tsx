@@ -59,6 +59,7 @@ export const NewArcModal: React.FC<NewArcModalProps> = ({
   const [progressionEpisode, setProgressionEpisode] = useState('');
   const [interferingCharacters, setInterferingCharacters] = useState<string[]>([]);
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const api = ApiClient.getInstance();
   const [, setActiveTab] = useState(0);
 
@@ -123,6 +124,7 @@ export const NewArcModal: React.FC<NewArcModalProps> = ({
   const handleGenerateContent = async () => {
     if (!progressionSeason || !progressionEpisode || !title || !description || !series) return;
 
+    setIsGenerating(true);
     try {
       const response = await api.generateProgression(
         null,
@@ -150,6 +152,8 @@ export const NewArcModal: React.FC<NewArcModalProps> = ({
         status: 'error',
         duration: 5000,
       });
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -386,6 +390,7 @@ export const NewArcModal: React.FC<NewArcModalProps> = ({
                             colorScheme="purple"
                             width="100%"
                             leftIcon={<StarIcon />}
+                            isLoading={isGenerating}
                             isDisabled={!progressionSeason || !progressionEpisode || !title || !description}
                             onClick={handleGenerateContent}
                             size="sm"

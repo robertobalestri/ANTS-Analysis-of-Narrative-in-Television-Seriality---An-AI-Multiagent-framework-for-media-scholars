@@ -1,10 +1,11 @@
-export { ArcType } from './arc';
+/* Barrel export — types from shared/ via individual type files */
+export { ArcType } from 'shared/types';
 export type {
   ArcProgression,
   NarrativeArc,
   ArcCluster,
   ProgressionMapping,
-  CreateArcData
+  CreateArcData,
 } from './arc';
 
 export type { ApiResponse } from './api';

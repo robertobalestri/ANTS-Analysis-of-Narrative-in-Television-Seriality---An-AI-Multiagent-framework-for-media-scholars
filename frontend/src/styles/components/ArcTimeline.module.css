@@ -1,6 +1,15 @@
 .timelineContainer {
   overflow-x: auto;
+  overflow-y: auto;
   margin-top: 1rem;
+  cursor: grab;
+  user-select: none;
+  max-height: calc(100vh - 300px);
+}
+
+.timelineContainer.dragging,
+.timelineContainer.dragging * {
+  cursor: grabbing !important;
 }
 
 .timelineGrid {

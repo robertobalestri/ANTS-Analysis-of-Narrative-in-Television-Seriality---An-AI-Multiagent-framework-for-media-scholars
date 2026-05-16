@@ -28,7 +28,9 @@ def _initialize_llm() -> ChatLiteLLM:
 
     full_model = f"{provider}/{model_name}" if provider else model_name
 
-    logger.info(f"Initializing LiteLLM ChatLiteLLM: model={full_model}")
+    timeout = int(os.getenv("LLM_TIMEOUT_SECONDS", 60))
+
+    logger.info(f"Initializing LiteLLM ChatLiteLLM: model={full_model}, timeout={timeout}s")
 
     return ChatLiteLLM(
         model=full_model,
@@ -36,6 +38,7 @@ def _initialize_llm() -> ChatLiteLLM:
         api_key=api_key,
         api_base=api_base,
         api_version=api_version,
+        timeout=timeout,
     )
 
 

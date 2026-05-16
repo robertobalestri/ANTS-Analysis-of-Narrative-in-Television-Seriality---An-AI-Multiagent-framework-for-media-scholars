@@ -20,6 +20,7 @@ class LLMService:
         self.max_retries = max_retries or int(os.getenv("LLM_RETRY_MAX_ATTEMPTS", 3))
         self.retry_delay = retry_delay or float(os.getenv("LLM_RETRY_BASE_DELAY_SECONDS", 1.0))
         self._llm = None
+        self._timeout = int(os.getenv("LLM_TIMEOUT_SECONDS", 120))
 
     @property
     def llm(self):
@@ -60,7 +61,8 @@ Return as a JSON array. If no merges needed, return empty array [].""")
 
         def _call():
             chain = prompt | self.llm
-            response = chain.invoke({"series": series, "arcs_json": arcs})
+            logger.debug(f"LLM call: merge_identical_arcs for series={series}")
+            response = chain.invoke({"series": series, "arcs_json": arcs}, config={"timeout": self._timeout})
             return clean_llm_json_response(response.content)
 
         return self._retry_on_failure(_call)
@@ -94,12 +96,13 @@ Return a JSON object with:
 
         def _call():
             chain = prompt | self.llm
+            logger.debug(f"LLM call: decide_arc_merging arc1={arc1.get('title')} arc2={arc2.get('title')}")
             response = chain.invoke({
                 "arc1_title": arc1.get("title"),
                 "arc1_description": arc1.get("description"),
                 "arc2_title": arc2.get("title"),
                 "arc2_description": arc2.get("description"),
-            })
+            }, config={"timeout": self._timeout})
             result = clean_llm_json_response(response.content)
             if isinstance(result, list) and len(result) > 0:
                 return result[0]
@@ -130,13 +133,14 @@ Return a one paragraph summary.""")
 
         def _call():
             chain = prompt | self.llm
+            logger.debug(f"LLM call: generate_progression_content arc={arc_title} S{season}E{episode}")
             response = chain.invoke({
                 "arc_title": arc_title,
                 "arc_type": arc_type,
                 "season": season,
                 "episode": episode,
                 "previous_content_text": f"Previous: {previous_content}" if previous_content else "This is the first progression.",
-            })
+            }, config={"timeout": self._timeout})
             return clean_llm_text_response(response.content)
 
         return self._retry_on_failure(_call)
@@ -161,11 +165,12 @@ Return ONLY the best appellation.""")
 
         def _call():
             chain = prompt | self.llm
+            logger.debug(f"LLM call: resolve_character_appellation char={character_name}")
             response = chain.invoke({
                 "character_name": character_name,
                 "series": series,
                 "known_appellations": known_appellations,
-            })
+            }, config={"timeout": self._timeout})
             return clean_llm_text_response(response.content)
 
         return self._retry_on_failure(_call)
@@ -201,12 +206,13 @@ Return as JSON with 'title' and 'description' keys.""")
         def _call():
             chain = prompt | self.llm
             progressions_text = "\n".join([f"- {p}" for p in progressions])
+            logger.debug(f"LLM call: evolve_arc_metadata arc={current_title}")
             response = chain.invoke({
                 "current_title": current_title,
                 "current_description": current_description,
                 "progressions_text": progressions_text,
                 "new_progression": new_progression,
-            })
+            }, config={"timeout": self._timeout})
             result = clean_llm_json_response(response.content)
             if isinstance(result, list) and len(result) > 0:
                 return result[0]

@@ -1,28 +1,7 @@
-export enum ArcType {
-  SoapArc = 'Soap Arc',
-  GenreSpecificArc = 'Genre-Specific Arc',
-  AnthologyArc = 'Anthology Arc'
-}
-
-export interface ArcProgression {
-  id: string;
-  content: string;
-  series: string;
-  season: string;
-  episode: string;
-  ordinal_position: number;
-  interfering_characters: string[];
-}
-
-export interface NarrativeArc {
-  id: string;
-  title: string;
-  description: string;
-  arc_type: ArcType;
-  main_characters: string[];
-  series: string;
-  progressions: ArcProgression[];
-}
+/* Unique arc types — shared types re-exported from shared/ */
+export { ArcType } from 'shared/types';
+import type { NarrativeArc, ArcProgression, ApiResponse } from 'shared/types';
+export type { NarrativeArc, ArcProgression, ApiResponse };
 
 export interface ArcCluster {
   cluster_id: number;
@@ -50,7 +29,6 @@ export interface ProgressionMapping {
   series?: string;
 }
 
-// Add a new type for creating arcs
 export interface CreateArcData extends Omit<Partial<NarrativeArc>, 'progressions'> {
   progressions?: Omit<Partial<ArcProgression>, 'id'>[];
-} 
+}

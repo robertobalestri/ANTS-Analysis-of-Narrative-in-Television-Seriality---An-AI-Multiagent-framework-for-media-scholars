@@ -37,8 +37,10 @@ logger = setup_logging(__name__)
 # Logging utility
 # ==============================
 
-def log_agent_output(agent_name: str, output_data: dict, log_dir: str = "agent_logs") -> None:
+def log_agent_output(agent_name: str, output_data: dict, log_dir: Optional[Path] = None) -> None:
     """Log agent output to a file with timestamp."""
+    if log_dir is None:
+        log_dir = Path(__file__).parent.parent.parent.parent / "agent_logs"
     log_dir_path = Path(log_dir)
     log_dir_path.mkdir(parents=True, exist_ok=True)
 
@@ -187,7 +189,7 @@ async def extract_narrative_arcs(file_paths: Dict[str, str], series: str, season
     logger.info("Starting extract_narrative_arcs function")
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_dir = Path("agent_logs")
+    log_dir = Path(__file__).parent.parent.parent.parent / "agent_logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     (log_dir / "current_run_timestamp.txt").write_text(timestamp)
 

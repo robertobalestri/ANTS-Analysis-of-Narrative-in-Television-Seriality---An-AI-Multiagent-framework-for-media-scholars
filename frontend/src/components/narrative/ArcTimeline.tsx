@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useCallback, useState } from 'react';
 import {
   Box,
   Grid,
@@ -42,6 +42,45 @@ export const ArcTimeline: React.FC<ArcTimelineProps> = ({
   const cellBgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.600');
 
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartX = useRef(0);
+  const dragStartY = useRef(0);
+  const scrollLeftRef = useRef(0);
+  const scrollTopRef = useRef(0);
+  const wasDraggedRef = useRef(false); // true → suppress cell click this drag session
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const DRAG_THRESHOLD = 5;
+
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    dragStartX.current = e.clientX;
+    dragStartY.current = e.clientY;
+    scrollLeftRef.current = e.currentTarget.scrollLeft;
+    scrollTopRef.current = e.currentTarget.scrollTop;
+    setIsDragging(true);
+    wasDraggedRef.current = false;
+    if (containerRef.current) containerRef.current.style.cursor = 'grabbing';
+  }, []);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDragging) return;
+    const container = e.currentTarget;
+    const dx = e.clientX - dragStartX.current;
+    const dy = e.clientY - dragStartY.current;
+    if (!wasDraggedRef.current && Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD) {
+      wasDraggedRef.current = true;
+    }
+    container.scrollLeft = scrollLeftRef.current - dx;
+    container.scrollTop = scrollTopRef.current - dy;
+  }, [isDragging]);
+
+  const handleMouseUpOrLeave = useCallback(() => {
+    setIsDragging(false);
+    if (containerRef.current) containerRef.current.style.cursor = '';
+    // Keep wasDraggedRef true briefly so child onClick sees it
+    setTimeout(() => { wasDraggedRef.current = false; }, 0);
+  }, []);
+
   const seasonEpisodes = React.useMemo(() => {
     const filteredEpisodes = episodes
       .filter(ep => ep.season === selectedSeason)
@@ -64,7 +103,14 @@ export const ArcTimeline: React.FC<ArcTimelineProps> = ({
   };
 
   return (
-    <Box className={styles.timelineContainer}>
+    <Box
+      ref={containerRef}
+      className={`${styles.timelineContainer}${isDragging ? ' ' + styles.dragging : ''}`}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUpOrLeave}
+      onMouseLeave={handleMouseUpOrLeave}
+    >
       <Grid
         templateColumns={`300px repeat(${seasonEpisodes.length}, minmax(200px, 1fr))`}
         className={styles.timelineGrid}
@@ -168,7 +214,10 @@ export const ArcTimeline: React.FC<ArcTimelineProps> = ({
                 <Box
                   key={`${arc.id}-${ep.episode}`}
                   className={styles.timelineCell}
-                  onClick={() => onCellClick(arc, ep.season, ep.episode)}
+                  onClick={(e) => {
+                    if (wasDraggedRef.current) return;
+                    onCellClick(arc, ep.season, ep.episode);
+                  }}
                   style={{
                     border: prog ? `2px solid ${getArcTypeColor(arc.arc_type)}` : '1px dashed gray',
                     background: cellBgColor

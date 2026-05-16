@@ -1,6 +1,2 @@
-export interface Character {
-  entity_name: string;
-  best_appellation: string;
-  series: string;
-  appellations: string[];
-} 
+/* Character types re-exported from shared/ */
+export type { Character } from 'shared/types';
