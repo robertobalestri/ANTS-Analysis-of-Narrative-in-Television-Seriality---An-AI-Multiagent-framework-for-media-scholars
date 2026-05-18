@@ -214,7 +214,7 @@ export const ArcTimeline: React.FC<ArcTimelineProps> = ({
                 <Box
                   key={`${arc.id}-${ep.episode}`}
                   className={styles.timelineCell}
-                  onClick={(e) => {
+                  onClick={() => {
                     if (wasDraggedRef.current) return;
                     onCellClick(arc, ep.season, ep.episode);
                   }}

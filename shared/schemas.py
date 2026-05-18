@@ -83,6 +83,7 @@ class ExplorerEpisodeStatusSchema(BaseModel):
     has_dialogue_json: bool
     has_analysis_artifacts: bool
     has_clips: bool
+    has_event_analysis: bool
     progression_count: int
     analysis_status: str
 

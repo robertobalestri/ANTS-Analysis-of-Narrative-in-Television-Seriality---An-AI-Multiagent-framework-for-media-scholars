@@ -21,10 +21,10 @@ import { CharacterManager } from './components/character/CharacterManager';
 import { AnalysisEnginePanel } from './components/analysis/AnalysisEnginePanel';
 import { LibraryExplorer } from './components/library/LibraryExplorer';
 import { SettingsPanel } from './components/settings/SettingsPanel';
+import { EventDrivenAnalysisDashboard } from './components/event_driven';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ApiClient } from './services/api/ApiClient';
 import { isApiSuccess } from './architecture/types/api';
-import type { WorkspaceSection } from './architecture/types';
 import { useWorkspaceStore } from './store/workspaceStore';
 import { useDashboardStore } from './store/dashboardStore';
 
@@ -128,6 +128,13 @@ const App: React.FC = () => {
           </ErrorBoundary>
         );
 
+      case 'event-driven-analysis':
+        return (
+          <ErrorBoundary>
+            <EventDrivenAnalysisDashboard series={selectedSeries || ''} />
+          </ErrorBoundary>
+        );
+
       case 'settings':
         return (
           <ErrorBoundary>
@@ -195,17 +202,22 @@ const App: React.FC = () => {
             <Box>
               <Heading size="xs" textTransform="uppercase" color="gray.500" mb={4}>Navigation</Heading>
               <VStack align="stretch" spacing={2}>
-                {(['series-manager', 'analysis-engine', 'visualization-dashboard', 'settings'] as WorkspaceSection[]).map((section) => (
+                {([
+                  { key: 'series-manager', label: 'Series Manager & File Upload' },
+                  { key: 'analysis-engine', label: 'Analysis Engine' },
+                  { key: 'event-driven-analysis', label: 'Event Driven Video Analysis' },
+                  { key: 'visualization-dashboard', label: 'Narrative Arcs Dashboard' },
+                  { key: 'settings', label: 'Settings' },
+                ] as const).map(({ key, label }) => (
                   <Button
-                    key={section}
-                    variant={activeSection === section ? 'solid' : 'ghost'}
-                    colorScheme={activeSection === section ? 'blue' : 'gray'}
-                    onClick={() => setActiveSection(section)}
+                    key={key}
+                    variant={activeSection === key ? 'solid' : 'ghost'}
+                    colorScheme={activeSection === key ? 'blue' : 'gray'}
+                    onClick={() => setActiveSection(key)}
                     justifyContent="flex-start"
                     size="sm"
-                    textTransform="capitalize"
                   >
-                    {section.replace('-', ' ')}
+                    {label}
                   </Button>
                 ))}
               </VStack>

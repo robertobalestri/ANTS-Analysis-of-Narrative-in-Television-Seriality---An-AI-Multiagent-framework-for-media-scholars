@@ -204,6 +204,23 @@ export const AnalysisEnginePanel: React.FC<AnalysisEnginePanelProps> = ({
     }
   };
 
+  const handleResetEventAnalysis = async () => {
+    if (!seriesData || !selectedSeason || !selectedEpisode) return;
+    if (!window.confirm("Are you sure you want to delete all extracted events and event video clips for this episode?")) return;
+
+    setIsSubmitting(true);
+    const response = await api.resetEventDrivenAnalysis(seriesData.code, selectedSeason, selectedEpisode);
+    setIsSubmitting(false);
+    
+    if (isApiSuccess(response)) {
+      toast({ title: 'Event analysis reset successful', status: 'success' });
+      await onRefresh?.();
+    } else {
+      const errorMsg = isApiError(response) ? response.error : 'Reset failed';
+      toast({ title: 'Reset failed', description: errorMsg, status: 'error' });
+    }
+  };
+
   const currentEpisodeData = useMemo(() => {
     return episodesForSeason.find(e => e.episode === selectedEpisode);
   }, [episodesForSeason, selectedEpisode]);
@@ -415,6 +432,81 @@ export const AnalysisEnginePanel: React.FC<AnalysisEnginePanelProps> = ({
               >
                 Run Scene Splitting
               </Button>
+            </VStack>
+          </Box>
+
+          {/* Card 5: Event-Driven Video Analysis */}
+          <Box bg="white" p={6} borderRadius="lg" shadow="md" borderTop="4px solid" borderColor="cyan.500">
+            <VStack align="stretch" spacing={4}>
+              <HStack justify="space-between">
+                <VStack align="left" spacing={1}>
+                  <HStack spacing={2}>
+                    <Text fontWeight="bold" fontSize="lg">Event-Driven Video Analysis</Text>
+                    {currentEpisodeData.has_event_analysis && (
+                      <>
+                        <Badge colorScheme="orange" variant="subtle" fontSize="xs">ALREADY COMPLETED</Badge>
+                        <IconButton
+                          aria-label="Reset event analysis"
+                          icon={<DeleteIcon />}
+                          size="xs"
+                          colorScheme="red"
+                          variant="ghost"
+                          onClick={(e) => { e.stopPropagation(); handleResetEventAnalysis(); }}
+                        />
+                      </>
+                    )}
+                  </HStack>
+                  <Badge colorScheme="cyan" variant="subtle" fontSize="xs">BEAT-LEVEL EXTRACTION</Badge>
+                </VStack>
+                <Badge colorScheme={currentEpisodeData.has_srt_file && (currentEpisodeData.analysis_status === 'completed' || currentEpisodeData.has_plot_file) ? 'green' : 'gray'}>
+                  {currentEpisodeData.has_srt_file && (currentEpisodeData.analysis_status === 'completed' || currentEpisodeData.has_plot_file) ? 'Ready' : 'Missing Assets'}
+                </Badge>
+              </HStack>
+              <Text fontSize="sm" color="gray.600">
+                Extract 20-30 beat-level events per episode with character detection, event typing, and video clip extraction.
+              </Text>
+              <Button
+                colorScheme="cyan"
+                onClick={async () => {
+                  setIsSubmitting(true);
+                  
+                  // 1. Run Narrative Arc Extraction if not already completed
+                  if (currentEpisodeData.analysis_status !== 'completed') {
+                    toast({ title: 'Pre-requisite: Starting Narrative Arc Extraction...', status: 'info', duration: 3000 });
+                    const arcResponse = await api.request(
+                      `/library/explorer/${selectedSeriesCode}/${selectedSeason}/${selectedEpisode}/narrative-arc-extraction`,
+                      { method: 'POST' }
+                    );
+                    
+                    if (!isApiSuccess(arcResponse)) {
+                      const errorMsg = isApiError(arcResponse) ? arcResponse.error : 'Arc extraction failed';
+                      toast({ title: 'Unable to extract arcs (pre-requisite failed)', description: errorMsg, status: 'error' });
+                      setIsSubmitting(false);
+                      return;
+                    }
+                    toast({ title: 'Narrative Arc Extraction completed successfully!', status: 'success', duration: 2000 });
+                  }
+                  
+                  // 2. Now run the Event-Driven Video Analysis
+                  toast({ title: 'Starting Event-Driven Video Analysis...', status: 'info', duration: 2000 });
+                  const result = await api.analyzeEpisodeEventDriven(selectedSeriesCode, selectedSeason, selectedEpisode);
+                  setIsSubmitting(false);
+                  
+                  if (isApiSuccess(result)) {
+                    toast({ title: `Analysis complete`, description: `${result.data.events_extracted} events extracted`, status: 'success' });
+                    await onRefresh?.();
+                  } else {
+                    toast({ title: 'Analysis failed', description: result.error, status: 'error' });
+                  }
+                }}
+                isLoading={isSubmitting}
+                isDisabled={!currentEpisodeData.has_srt_file || (currentEpisodeData.analysis_status !== 'completed' && !currentEpisodeData.has_plot_file)}
+              >
+                Run Event Analysis
+              </Button>
+              <Text fontSize="xs" color="gray.500" fontStyle="italic">
+                *Note: Narrative Arc Extraction will automatically run first if not already completed.
+              </Text>
             </VStack>
           </Box>
         </SimpleGrid>

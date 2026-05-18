@@ -188,6 +188,10 @@ export class ApiClient {
     });
   }
 
+  async getEpisodeFile(series: string, season: string, episode: string, fileType: string): Promise<ApiResponse<{ content: string }>> {
+    return this.request<{ content: string }>(`/library/series/${series}/${season}/${episode}/file/${fileType}`);
+  }
+
   async analyzeVideoScenes(series: string, season: string, episode: string): Promise<ApiResponse<{ status: string; message: string; scenes: any[] }>> {
     return this.request<{ status: string; message: string; scenes: any[] }>(`/library/series/${series}/${season}/${episode}/analyze-video`, {
       method: 'POST',
@@ -530,6 +534,52 @@ export class ApiClient {
         error: error instanceof Error ? error.message : 'Unknown error occurred'
       };
     }
+  }
+
+  // Events endpoints
+  async getEventDrivenAnalysisSnapshot(series: string): Promise<ApiResponse<import('@/architecture/types').EventDrivenAnalysisSnapshot>> {
+    return this.request<import('@/architecture/types').EventDrivenAnalysisSnapshot>(`/events/${series}/snapshot`);
+  }
+
+  async getEventDrivenAnalysisEvent(series: string, eventId: string): Promise<ApiResponse<import('@/architecture/types').NarrativeEvent>> {
+    return this.request<import('@/architecture/types').NarrativeEvent>(`/events/${series}/events/${eventId}`);
+  }
+
+  async addEventDrivenAnalysisEvents(series: string, events: import('@/architecture/types').NarrativeEvent[]): Promise<ApiResponse<{ added: number }>> {
+    return this.request<{ added: number }>(`/events/${series}/events`, {
+      method: 'POST',
+      body: JSON.stringify(events),
+    });
+  }
+
+  async analyzeEpisodeEventDriven(
+    series: string,
+    season: string,
+    episode: string
+  ): Promise<ApiResponse<import('@/architecture/types').AnalyzeResult>> {
+    return this.request<import('@/architecture/types').AnalyzeResult>(`/events/${series}/analyze`, {
+      method: 'POST',
+      body: JSON.stringify({ season, episode }),
+    });
+  }
+
+  async resetEventDrivenAnalysis(
+    series: string,
+    season: string,
+    episode: string
+  ): Promise<ApiResponse<{ reset: boolean; episode_ref: string; removed_events_count: number }>> {
+    return this.request<{ reset: boolean; episode_ref: string; removed_events_count: number }>(
+      `/events/${series}/${season}/${episode}/reset`,
+      { method: 'POST' }
+    );
+  }
+
+  async saveEventDrivenAnalysis(series: string): Promise<ApiResponse<{ saved: boolean }>> {
+    return this.request<{ saved: boolean }>(`/events/${series}/save`, { method: 'POST' });
+  }
+
+  async clearEventDrivenAnalysis(series: string): Promise<ApiResponse<{ cleared: boolean }>> {
+    return this.request<{ cleared: boolean }>(`/events/${series}/clear`, { method: 'POST' });
   }
 }
  

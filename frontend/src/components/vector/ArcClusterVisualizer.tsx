@@ -48,6 +48,7 @@ interface ArcClusterVisualizerProps {
     threshold: number;
     minClusterSize: number;
     maxClusters: number;
+    excludeArcTypes?: string;
   }) => Promise<void>;
   isLoading: boolean;
 }

@@ -265,6 +265,8 @@ class SeriesIngestionService:
             saved["source_type"] = "plot"
             return saved
 
+        path_handler = PathHandler(normalized_series, normalized_season, normalized_episode, base_dir=self.base_dir)
+
         if lowered.endswith('.srt'):
             srt_path = Path(path_handler.get_srt_file_path())
             with open(srt_path, "w", encoding="utf-8") as srt_file:
@@ -326,10 +328,23 @@ class SeriesIngestionService:
         )
         path_handler = PathHandler(normalized_series, normalized_season, normalized_episode, base_dir=self.base_dir)
         plot_path = Path(path_handler.get_raw_plot_file_path())
-        
+
         if plot_path.exists():
             from app.utils.text import load_text
             return load_text(str(plot_path))
+        return None
+
+    def get_episode_srt_content(self, series_code: str, season_code: str, episode_code: str) -> Optional[str]:
+        normalized_series, normalized_season, normalized_episode, _ = self._normalize_episode_target(
+            series_code,
+            season_code,
+            episode_code,
+        )
+        episode_dir = Path(self.base_dir) / normalized_series / normalized_season / normalized_episode
+        srt_files = list(episode_dir.glob("*.srt"))
+        if srt_files:
+            from app.utils.text import load_text
+            return load_text(str(srt_files[0]))
         return None
 
     def get_series_status(self, series_code: str) -> Dict[str, Any]:

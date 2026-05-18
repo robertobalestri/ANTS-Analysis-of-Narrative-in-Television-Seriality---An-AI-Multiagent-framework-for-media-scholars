@@ -9,7 +9,7 @@ import os
 
 from app.core.logging import setup_logging
 from app.core.config import check_env_or_exit
-from app.api.v1 import arcs, progressions, characters, vector, library, episodes, settings
+from app.api.v1 import arcs, progressions, characters, vector, library, episodes, settings, events
 
 # Setup logging
 logger = setup_logging(__name__)
@@ -51,6 +51,7 @@ app.include_router(vector.router)
 app.include_router(library.router)
 app.include_router(episodes.router)
 app.include_router(settings.router, prefix="/api")
+app.include_router(events.router)
 
 
 class _HealthCheckEmbeddingModel(Embeddings):

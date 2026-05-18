@@ -33,6 +33,20 @@ class LibraryEpisodeStatusBuilder:
         metadata_path = scenes_dir / "scenes_metadata.json"
         has_clips = db_clips_completed or metadata_path.exists()
 
+        # Check for event analysis
+        has_event_analysis = False
+        event_snapshot_file = Path(self.base_dir) / series_code / "event_driven_analysis_snapshot.json"
+        if event_snapshot_file.exists():
+            try:
+                import json
+                data = json.loads(event_snapshot_file.read_text(encoding="utf-8"))
+                for event_data in data.get("events", []):
+                    if event_data.get("episode_ref") == f"{season_code}{episode_code}":
+                        has_event_analysis = True
+                        break
+            except Exception:
+                pass
+
         # Use DB status as authoritative if set, otherwise compute from files
         if db_status in ('completed', 'error', 'pending', 'not_processed', 'missing_files'):
             analysis_status = db_status
@@ -56,6 +70,7 @@ class LibraryEpisodeStatusBuilder:
             "has_dialogue_json": full_dialogues_path.exists(),
             "has_analysis_artifacts": has_analysis_artifacts,
             "has_clips": has_clips,
+            "has_event_analysis": has_event_analysis,
             "progression_count": progression_count,
             "analysis_status": analysis_status,
         }

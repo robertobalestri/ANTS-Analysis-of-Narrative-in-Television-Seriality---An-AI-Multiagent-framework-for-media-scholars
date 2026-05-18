@@ -146,3 +146,8 @@ class CharacterMergeRequest(BaseModel):
     character1_id: str
     character2_id: str
     keep_character: str
+
+
+class EventDrivenVideoAnalysisRequest(BaseModel):
+    season: str
+    episode: str

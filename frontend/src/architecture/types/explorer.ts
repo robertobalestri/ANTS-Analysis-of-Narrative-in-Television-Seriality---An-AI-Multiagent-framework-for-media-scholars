@@ -1,2 +1,2 @@
-/* Explorer types re-exported from shared/ */
-export type { ExplorerEpisodeStatus, ExplorerSeason, ExplorerSeries } from 'shared/types';
+/* Explorer types - re-exported from library types (unified LibrarySeriesStatus) */
+export type { ExplorerEpisodeStatus, ExplorerSeason, ExplorerSeries } from './library';

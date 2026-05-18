@@ -9,13 +9,25 @@ export type {
 } from './arc';
 
 export type { ApiResponse } from './api';
-
-export type { Episode } from './episode';
-export type { LibrarySeriesSummary, LibrarySeriesStatus, LibraryEpisodeStatus, LibraryUpload } from './library';
-
 export type { Character } from './character';
+export type { Episode } from './episode';
 
 export type { VectorStoreEntry } from './vector';
 
-export type { ExplorerEpisodeStatus, ExplorerSeason, ExplorerSeries } from './explorer';
+export type {
+  LibrarySeriesSummary,
+  LibrarySeriesStatus,
+  LibraryEpisodeStatus,
+  LibraryUpload,
+  ExplorerSeries,
+  ExplorerSeason,
+  ExplorerEpisodeStatus
+} from './library';
 export type { WorkspaceSection } from './workspace';
+
+export type {
+  NarrativeEvent,
+  ArcInfo,
+  EventDrivenAnalysisSnapshot,
+  AnalyzeResult
+} from './event_driven';

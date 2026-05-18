@@ -307,12 +307,13 @@ async def upload_episode_file(series: str, season: str, episode: str, file: Uplo
                 
                 current_status = status_builder.build(normalized_series, normalized_season, normalized_episode, 0)
                 
-                # If plot is now present, status should be "pending" (ready for analysis)
-                if current_status["has_plot_file"]:
-                    ep_meta.analysis_status = "pending"
-                elif current_status["has_srt_file"]:
-                    # If only SRT is present and auto-gen failed or something, it's still missing the plot
-                    ep_meta.analysis_status = "missing_files"
+                # If plot is now present and status wasn't already completed, set to "pending"
+                if ep_meta.analysis_status != "completed":
+                    if current_status["has_plot_file"]:
+                        ep_meta.analysis_status = "pending"
+                    elif current_status["has_srt_file"]:
+                        # If only SRT is present and auto-gen failed or something, it's still missing the plot
+                        ep_meta.analysis_status = "missing_files"
                 
                 session.add(ep_meta)
                 session.commit()
@@ -337,6 +338,32 @@ async def get_episode_plot(series: str, season: str, episode: str):
         raise
     except Exception as e:
         logger.error(f"Error getting plot content: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/series/{series}/{season}/{episode}/file/{file_type}")
+async def get_episode_file(series: str, season: str, episode: str, file_type: str):
+    """Get episode file content (srt, plot, etc)."""
+    try:
+        from app.services.library.ingestion import SeriesIngestionService
+        svc = SeriesIngestionService(base_dir=DATA_DIR)
+
+        if file_type == 'srt':
+            content = svc.get_episode_srt_content(series, season, episode)
+            if content is None:
+                raise HTTPException(status_code=404, detail="SRT file not found")
+            return {"content": content}
+        elif file_type == 'plot':
+            content = svc.get_episode_plot_content(series, season, episode)
+            if content is None:
+                raise HTTPException(status_code=404, detail="Plot file not found")
+            return {"content": content}
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {file_type}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting episode file: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -375,13 +402,10 @@ async def delete_episode_file(series: str, season: str, episode: str, file_type:
                 
                 current_status = status_builder.build(normalized_series, normalized_season, normalized_episode, 0)
                 
-                if not current_status["has_plot_file"] and not current_status["has_srt_file"]:
+                if not current_status["has_plot_file"]:
                     ep_meta.analysis_status = "missing_files"
-                elif current_status["has_plot_file"]:
+                elif ep_meta.analysis_status != "completed":
                     ep_meta.analysis_status = "pending"
-                else:
-                    # Only SRT left
-                    ep_meta.analysis_status = "missing_files"
                     
                 session.add(ep_meta)
                 session.commit()
@@ -427,7 +451,7 @@ async def analyze_series(series: str, background_tasks: BackgroundTasks):
             series_meta.analysis_state = "in_progress"
             session.commit()
 
-        pipeline = AnalysisPipelineService()
+        pipeline = NarrativeArcExtractionPipelineService()
 
         async def run():
             result = await pipeline.analyze_series(series)
@@ -464,8 +488,8 @@ async def analyze_series(series: str, background_tasks: BackgroundTasks):
 async def analyze_video_scenes(series: str, season: str, episode: str):
     """Trigger video scene analysis for an episode."""
     try:
-        from app.services.analysis.pipeline import AnalysisPipelineService
-        pipeline = AnalysisPipelineService()
+        from app.services.analysis.pipeline import NarrativeArcExtractionPipelineService
+        pipeline = NarrativeArcExtractionPipelineService()
         result = await pipeline.analyze_video_scenes(series, season, episode)
         if result.get("status") == "error":
             raise HTTPException(status_code=400, detail=result.get("message"))
@@ -481,8 +505,8 @@ async def analyze_video_scenes(series: str, season: str, episode: str):
 async def transcribe_video(series: str, season: str, episode: str):
     """Trigger video transcription for an episode."""
     try:
-        from app.services.analysis.pipeline import AnalysisPipelineService
-        pipeline = AnalysisPipelineService()
+        from app.services.analysis.pipeline import NarrativeArcExtractionPipelineService
+        pipeline = NarrativeArcExtractionPipelineService()
         result = await pipeline.transcribe_episode_video(series, season, episode)
         if result.get("status") == "error":
             raise HTTPException(status_code=400, detail=result.get("message"))
@@ -498,8 +522,8 @@ async def transcribe_video(series: str, season: str, episode: str):
 async def plot_from_srt(series: str, season: str, episode: str):
     """Generate plot summary from an existing SRT file."""
     try:
-        from app.services.analysis.pipeline import AnalysisPipelineService
-        pipeline = AnalysisPipelineService()
+        from app.services.analysis.pipeline import NarrativeArcExtractionPipelineService
+        pipeline = NarrativeArcExtractionPipelineService()
         result = await pipeline.generate_plot_from_srt(series, season, episode)
         if result.get("status") == "error":
             raise HTTPException(status_code=400, detail=result.get("message"))
@@ -515,8 +539,8 @@ async def plot_from_srt(series: str, season: str, episode: str):
 async def full_video_to_plot(series: str, season: str, episode: str):
     """Transcribe video and generate plot summary."""
     try:
-        from app.services.analysis.pipeline import AnalysisPipelineService
-        pipeline = AnalysisPipelineService()
+        from app.services.analysis.pipeline import NarrativeArcExtractionPipelineService
+        pipeline = NarrativeArcExtractionPipelineService()
         result = await pipeline.full_video_to_plot(series, season, episode)
         if result.get("status") == "error":
             raise HTTPException(status_code=400, detail=result.get("message"))
@@ -530,28 +554,13 @@ async def full_video_to_plot(series: str, season: str, episode: str):
 
 @router.get("/series/{series}/status")
 async def get_series_status(series: str):
-    """Get detailed status for a series."""
+    """Get detailed status for a series (full episode status with file availability)."""
     try:
-        with db_manager.session_scope() as session:
-            from sqlmodel import select
-            series_meta = session.exec(
-                select(SeriesMetadata).where(SeriesMetadata.code == series)
-            ).first()
-            if not series_meta:
-                raise HTTPException(status_code=404, detail="Series not found")
-
-            return {
-                "code": series_meta.code,
-                "display_name": series_meta.display_name,
-                "analysis_state": series_meta.analysis_state,
-                "seasons": [
-                    {
-                        "code": s.season_code,
-                        "episode_count": len(s.episodes) if s.episodes else 0,
-                    }
-                    for s in (series_meta.seasons or [])
-                ]
-            }
+        from app.services.library.explorer import LibraryExplorerService
+        svc = LibraryExplorerService(base_dir=DATA_DIR)
+        return svc.get_series_overview(series)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
