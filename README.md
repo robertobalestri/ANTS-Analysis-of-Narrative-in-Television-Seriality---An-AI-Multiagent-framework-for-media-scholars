@@ -10,10 +10,10 @@
 
 ## 📌 Table of Contents
 1. [Core Features](#-core-features)
-2. [How It Works (Step-by-Step Workflow)](#-how-it-works-step-by-step-workflow)
-3. [UI & Workspace Navigation](#-ui--workspace-navigation)
-4. [Quick Start](#-quick-start)
-5. [Developer Setup & Architecture](#-developer-setup--architecture)
+2. [Required Files for Analysis & Generation Pipelines](#-required-files-for-analysis--generation-pipelines)
+3. [How It Works (Step-by-Step Workflow)](#-how-it-works-step-by-step-workflow)
+4. [UI & Workspace Navigation](#-ui--workspace-navigation)
+5. [Quick Start](#-quick-start)
 6. [Environment Configuration](#-environment-configuration)
 
 ---
@@ -25,7 +25,7 @@
 * **Hierarchical Organization:** Manage research targets seamlessly by Series, Seasons, and Episodes.
 * **Flexible Ingestion Pipelines:** Ingest narrative data via direct upload (plots, subtitles, videos), or utilize automated transcription pipelines and AI starting from the video file only.
 
-### 🧠 Multi-Agent Analysis Engine
+### 🧠 Multi-Agent Narrative Arc Extraction Analysis
 * **Narrative Arc Extraction:** Map and track overlapping story threads across multiple episodes using orchestrated multi-agent workflows.
 * **Character Profiling:** Automatically extract, resolve, and stabilize character identities over long-form seriality.
 
@@ -47,6 +47,20 @@
 
 ---
 
+## 📋 Required Files for Analysis & Generation Pipelines
+
+To run different types of narrative processing and analysis, you must ensure the correct source files are present in the episode directory. The dashboard indicates file presence with checkmarks/crosses.
+
+| Pipeline / Analysis Operation | Required Input Files | Output / Resulting Files | Description |
+| :--- | :--- | :--- | :--- |
+| **Subtitle-to-Plot Synthesis** | Subtitle file (`.srt`) | Plot summary (`.txt`) | Uses LLMs to summarize dialog transcripts into a linear chronological plot summary. |
+| **Video Transcription** | Video file (`.mp4`, `.mkv`, etc.) | Subtitle file (`.srt`) | Uses WhisperX to transcribe voice tracks with word-level timestamps. |
+| **Full Video-to-Plot Pipeline** | Video file (`.mp4`, `.mkv`, etc.) | Subtitle (`.srt`) & Plot (`.txt`) | Runs video transcription, then synthesizes the plot summary in one unified execution. |
+| **Multi-Agent Narrative Arc Extraction** | Plot summary (`.txt`) | SQLite & ChromaDB Vector Store artifacts | Orchestrates multi-agent analysis to extract story arcs, character profiles, and vector embeddings. |
+| **Event-Driven Video Analysis** | Video file, Subtitle file (`.srt`), **AND** Completed Narrative Arc Extraction | Mapped events & Auto-clipped video clips | Scans transcripts, slices narrative events into individual video clips via FFmpeg, and maps them to known arcs. |
+
+---
+
 ## 📖 How It Works (Step-by-Step Workflow)
 
 ### Step 1: Ingest & Populate Media Assets
@@ -54,10 +68,10 @@ Navigate to the **Series Manager**. Initialize your target series (e.g., Code: `
 * **Direct Upload:** Drag-and-drop pre-existing written plot summaries (`.txt`), subtitle transcripts (`.srt`), or video files.
 * **Subtitle-Only Ingestion:** Upload an `.srt` and trigger **Generate Plot** to synthesize a linear narrative plot summary via LLM.
 * **Video-Only Ingestion:** Upload a video, run the **Transcription Pipeline** (WhisperX) to generate an `.srt`, then synthesize the `.txt` plot summary.
-* **Batch Generation:** Use the **Generate Missing Plots** feature at the Season level to batch-synthesize missing text summaries from existing subtitle tracks.
+* **Batch Generation:** Use the **Generate Missing Plots** feature at the Season level from the **Analysis Engine** to batch-synthesize missing text summaries from existing subtitle tracks.
 
 > [!IMPORTANT]
-> **Scholar Review & Correction:** Because LLM-generated plot summaries serve as the foundational source material for the multi-agent narrative analysis, scholars should always review the generated plots from the  and make qualitative corrections directly in the UI before running the analysis engine.
+> **Scholar Review & Correction:** Because LLM-generated plot summaries serve as the foundational source material for the multi-agent narrative analysis, scholars should always review the generated plots from the **Series Manager** and make corrections (if needed) directly in the UI before running the analysis engine.
 
 ### Step 2: Orchestrate the Analysis
 Switch to the **Analysis Engine** panel to run targeted background operations:
@@ -95,7 +109,6 @@ The fastest way to launch **ANTS** is by using the unified startup script, which
 
 ### 1. Prerequisites
 * **Python 3.10+**
-* **Node.js 18+** *(Required only for initial frontend compilation)*
 
 ### 2. Launching the Framework
 1. Clone the repository and navigate to the project root folder.
@@ -106,11 +119,9 @@ The fastest way to launch **ANTS** is by using the unified startup script, which
 
 3. The script will dynamically orchestrate the following:
 * Build a Python virtual environment (`.venv`) and install dependencies.
-* Detect your operating system and place correct local `ffmpeg`/`ffprobe` binaries inside `backend/bin/`.
-* Compile and build static production assets for the frontend workspace.
-* Spin up the FastAPI server and launch the app in your browser at `http://localhost:8000`.
-
-
+* Detect your operating system and automatically download the correct local `ffmpeg`/`ffprobe` binaries inside `backend/bin/` if not already present.
+* Start the backend server and serve the pre-built frontend interface.
+* Launch the application directly in your default browser at `http://localhost:8000`.
 
 ### 3. Core Configuration
 
@@ -120,60 +131,9 @@ The fastest way to launch **ANTS** is by using the unified startup script, which
 
 ---
 
-## 🛠️ Developer Setup & Architecture
-
-For active development or modifying backend and frontend modules independently:
-
-### 📐 Technical Architecture & Stack
-
-* **Backend Framework:** Python 3.10+, FastAPI, SQLModel (SQLite storage layer)
-* **Agent Orchestration:** LangGraph (multi-agent workflows), LiteLLM (multi-provider LLM interfacing)
-* **ML & Processing Pipeline:** WhisperX (speech-to-text), PyTorch (CUDA-optimized processing), FFmpeg/FFprobe CLI wrappers (video engineering)
-* **Vector Vector Store:** ChromaDB (high-dimensional narrative beat embeddings)
-* **Frontend Ecosystem:** React 18, TypeScript, Vite, Chakra UI, Plotly.js (3D PCA rendering)
-
-### 1. External Binaries
-
-Ensure `ffmpeg` and `ffprobe` are available on your system `PATH`, or explicitly place compiled binaries in the `backend/bin/` directory so the automation pipelines can locate them.
-
-### 2. Manual Backend Bootstrapping
-
-Activate the isolated virtual environment and initialize the FastAPI development server:
-
-```bash
-cd backend
-python -m venv .venv
-
-# On Windows (PowerShell):
-.venv\Scripts\Activate.ps1
-# On Linux/macOS:
-source .venv/bin/activate
-
-pip install -r requirements.txt
-uvicorn app.api.main:app --reload
-
-```
-
-> *Note: Database models and vector collections will initialize automatically under `backend/narrative_storage/`.*
-
-### 3. Manual Frontend Bootstrapping
-
-Launch the React Vite development server (proxies API requests natively to port `8000`):
-
-```bash
-cd frontend
-npm install
-npm run dev
-
-```
-
-The client dashboard will run on `http://localhost:3000`.
-
----
-
 ## 🔑 Environment Configuration
 
-The framework manages variables dynamically via the **Settings UI** or via direct modification of `backend/.env`.
+The framework manages variables dynamically via the **Settings UI**.
 
 ### Core LLM & Embedding Layer
 
@@ -181,7 +141,7 @@ The framework manages variables dynamically via the **Settings UI** or via direc
 | --- | --- |
 | **LLM_API_KEY** | Authentication key for your chosen language model provider. |
 | **LLM_API_BASE** | Target endpoint URL for the API provider. |
-| **LLM_MODEL** | Identification string for the model (e.g., `gpt-4o`, `claude-3-5-sonnet`). |
+| **LLM_MODEL** | Identification string for the model (e.g., `gpt-5.5`, `claude-opus-4.7`). |
 | **EMBED_API_KEY** | Authentication key for the vector embedding provider. |
 | **EMBED_API_BASE** | Target endpoint URL for the embedding provider. |
 
