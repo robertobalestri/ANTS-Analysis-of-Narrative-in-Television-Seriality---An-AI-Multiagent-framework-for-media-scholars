@@ -1,4 +1,4 @@
-# ANTS: Visual and Functional Guide (Grey's Anatomy Edition)
+# ANTS: Visual and Functional Guide
 
 Welcome to the user guide and documentation for **ANTS (Analysis of Narrative in Television Seriality)**. This document provides media scholars and television researchers with a comprehensive overview of the software's capabilities, utilizing **Grey's Anatomy** as the reference case study.
 
@@ -18,6 +18,12 @@ The **Series Manager** is the primary portal for managing your television resear
   - The video file (MP4/MKV)
   - Subtitle files in `.srt` format (essential for NLP processing and dialogue analysis)
   - Plot summaries and synopses (to enrich contextual narrative understanding)
+
+### 1.1 Single Episode Upload Detail
+
+Clicking on an individual episode opens a dedicated upload panel showing all assets for that episode, their status, and inline editing options for the plot text.
+
+![Single Episode Upload Detail](./images/episode_upload.png)
 
 ---
 
@@ -52,6 +58,42 @@ The **Narrative Arcs Dashboard** visualizes the semantic structures extracted by
 - **Interactive Scene Explorer:** Click on any narrative arc to view its description, associated scenes, and AI-generated textual summaries of how the storyline develops.
 
 - **Human In The Loop**: Users can correct the AI-generated narrative arcs by adding, deleting, editing, merging, or splitting them into multiple arcs.
+
+### 3.1 Cluster Analysis
+
+The **Cluster Analysis** tab uses HDBSCAN to automatically group semantically similar narrative arcs into thematic clusters. Scholars can adjust the minimum cluster size and toggle whether to include anthology arcs, then recalculate to explore different groupings. This helps in identifying narrative arcs with similar semantic structures that may be redundant and duplicated, inviting the scholar to intervene in the process of narrative arc curation merging them.
+
+![Cluster Analysis](./images/cluster_analysis.png)
+
+### 3.2 Vector Store Explorer
+
+The **Vector Store Explorer** provides a 3D interactive representation of the semantic space of all narrative arcs, allowing scholars to see how narrative arcs are related to each other semantically.
+
+![Vector Store Explorer](./images/vector_store_explorer.png)
+
+### 3.3 Characters
+
+The **Characters** tab lists all characters detected across the series. Scholars can review, merge duplicate character entries, and manage character identities to ensure clean downstream analysis.
+
+![Characters Merging Panel](./images/characters_merging.png)
+
+### 3.4 Creating a New Arc
+
+The **Add Arc** modal allows scholars to manually define a new narrative arc by specifying its title, type (Soap/Anthological/Genre), description, and the episodes it spans.
+
+![New Arc Modal](./images/new_arc_modal.png)
+
+### 3.5 Merging Arcs
+
+The **Merge Arcs** modal lets scholars consolidate two or more arcs identified as semantically equivalent into a single unified arc, preserving all associated progressions and scene mappings.
+
+![Merge Arcs Modal](./images/merge_arcs_modal.png)
+
+### 3.6 Inserting a Progression into an Arc
+
+The **Insert Progression** modal lets scholars manually add a new narrative episode-level progression into an existing arc, specifying the episode, a textual description, and its position in the arc's timeline.
+
+![Insert Progression Modal](./images/insert_progression_modal.png)
 
 ---
 
