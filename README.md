@@ -23,25 +23,27 @@
 ### 🏛️ Library & Metadata Management
 * **Automated Series Ingestion:** Create series with just a code and name; pulls official posters and metadata via the IMDb API.
 * **Hierarchical Organization:** Manage research targets seamlessly by Series, Seasons, and Episodes.
-* **Flexible Ingestion Pipelines:** Ingest narrative data via direct upload (plots, subtitles, videos), or utilize automated transcription pipelines.
-* **Intelligent Status Tracking:** Visual readiness indicators for file presence (`.srt`, `.txt` plots, videos) and analysis state.
+* **Flexible Ingestion Pipelines:** Ingest narrative data via direct upload (plots, subtitles, videos), or utilize automated transcription pipelines and AI starting from the video file only.
 
 ### 🧠 Multi-Agent Analysis Engine
 * **Narrative Arc Extraction:** Map and track overlapping story threads across multiple episodes using orchestrated multi-agent workflows.
 * **Character Profiling:** Automatically extract, resolve, and stabilize character identities over long-form seriality.
-* **Semantic Progression:** Map the qualitative evolution of narrative beats using high-dimensional embeddings and vector space.
 
 ### 🎬 Event-Driven Video Analysis
-* **Automated Video Transcription:** Converts video files (`.mp4`, `.mkv`, etc.) into synchronized subtitle files (`.srt`) using WhisperX (with CUDA acceleration).
-* **Narrative Event Extraction:** Scans transcripts via LLM to identify, timestamp, and qualitatively justify discrete narrative events.
-* **Auto-Clipping Engine:** Automatically segments and extracts individual video clips for each narrative event using FFmpeg.
-* **Arc-to-Event Mapping:** Links visual and audio evidence directly to high-level thematic structures.
+* **Narrative Event Extraction:** Scans transcripts via LLM to identify narrative events.
+* **Auto-Clipping Engine:** Automatically segments and extracts individual video clips for each narrative event.
+* **Arc-to-Event Mapping:** Links narrative arcs to single events to build a comprehensive understanding of the narrative structure.
 
-### 📊 Visualization Dashboard
+### 📊 Visualization Dashboard of Narrative Arc Extraction
 * **Interactive Timeline:** High-fidelity tracking of narrative arcs and their presence across episodes.
 * **Vector Store Explorer:** Interactive 3D PCA visualization of narrative beat clusters to discover hidden semantic relations.
 * **Character Networks:** Track character appearances, prominence, and interactive roles.
 * **Annotated Video Player:** Play back auto-extracted event clips directly alongside their multi-agent narrative annotations.
+
+### 📊 Visualization Dashboard of Event-Driven Video Analysis
+* **Interactive Timeline:** High-fidelity tracking of events and how they relate to narrative arcs.
+* **Annotated Video Player:** Play back auto-extracted event clips directly.
+
 
 ---
 
@@ -55,7 +57,7 @@ Navigate to the **Series Manager**. Initialize your target series (e.g., Code: `
 * **Batch Generation:** Use the **Generate Missing Plots** feature at the Season level to batch-synthesize missing text summaries from existing subtitle tracks.
 
 > [!IMPORTANT]
-> **Scholar Review & Correction:** Because LLM-generated plot summaries serve as the foundational source material for the multi-agent narrative analysis, scholars should always review the generated `.txt` plots and make qualitative corrections directly in the UI before running the analysis engine.
+> **Scholar Review & Correction:** Because LLM-generated plot summaries serve as the foundational source material for the multi-agent narrative analysis, scholars should always review the generated plots from the  and make qualitative corrections directly in the UI before running the analysis engine.
 
 ### Step 2: Orchestrate the Analysis
 Switch to the **Analysis Engine** panel to run targeted background operations:
@@ -100,9 +102,7 @@ The fastest way to launch **ANTS** is by using the unified startup script, which
 2. Run the automated startup script:
    ```bash
    python run_app.py
-   
-
-```
+   ```
 
 3. The script will dynamically orchestrate the following:
 * Build a Python virtual environment (`.venv`) and install dependencies.
@@ -192,18 +192,7 @@ The framework manages variables dynamically via the **Settings UI** or via direc
 | **LLM_PROVIDER** | `""` (derived) | Provider engine string (`openai`, `azure`, `anthropic`, `ollama`). |
 | **EMBED_PROVIDER** | `""` (derived) | Embedding engine string (`openai`, `azure`, `cohere`). |
 | **EMBED_MODEL** | `embed-v-4-0` | Model configuration string for text vectorization. |
-| **DATABASE_NAME** | `sqlite:///./narrative_storage/narrative.db` | Connection string for structural relation mapping. |
-| **PERSIST_DIRECTORY** | `./narrative_storage/chroma_db` | Storage path for ChromaDB vectors. |
 
 ---
 
 *Created by media scholars, for media scholars.*
-
-```
-
-### Why this is better:
-1. **Clear Split between Scholar & Developer:** The "How It Works" workflow is placed right after features, meaning a non-technical researcher can read the document, understand how to prepare data, and review plots without getting bogged down in terminal commands.
-2. **Unified Script Highlighted:** The `run_app.py` quick start is placed ahead of manual developer instructions, encouraging standard users to use the automated script first.
-3. **Consistent Tone:** Technical requirements are contextualized into an indexable, scannable handbook.
-
-```
