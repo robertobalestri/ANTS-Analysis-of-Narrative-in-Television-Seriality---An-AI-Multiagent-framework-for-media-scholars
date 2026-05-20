@@ -6,6 +6,12 @@
 
 **ANTS** is an advanced AI-powered framework designed specifically for media scholars and narrative analysts. It provides a comprehensive suite of tools for extracting, analyzing, and visualizing complex narrative structures in long-form television content.
 
+> **Note on Research Heritage:**  
+> This work is an extension and enhancement of the original research described in:  
+> **Balestri, R. and Pescatore, G. (2025).** *Multi-Agent System for AI-Assisted Extraction of Narrative Arcs in TV Series*. In Proceedings of the 17th International Conference on Agents and Artificial Intelligence - Volume 1. DOI: [10.5220/0013369600003890](https://doi.org/10.5220/0013369600003890).  
+> 
+> A comprehensive comparison of the new features, pipeline extensions, and multi-agent graph optimizations is readable in [CHANGES.md](CHANGES.md). The repository for the earlier, text-only prototype implementation is archived at [robertobalestri/MAS-AI-Assisted-Narrative-Arcs-Extraction-TV-Series](https://github.com/robertobalestri/MAS-AI-Assisted-Narrative-Arcs-Extraction-TV-Series).
+
 ---
 
 ## 📌 Table of Contents
