@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Box, Button, HStack, Text, VStack, useToast, Table, Thead, Tbody, Tr, Th, Td, Checkbox, Icon, Tooltip } from '@chakra-ui/react';
+import { Box, Button, HStack, Text, VStack, useToast, Table, Thead, Tbody, Tr, Th, Td, Checkbox, Icon, Tooltip, Progress, Badge, Spinner } from '@chakra-ui/react';
 import { CheckCircleIcon, WarningIcon, CloseIcon, TimeIcon } from '@chakra-ui/icons';
 import { ApiClient } from '@/services/api/ApiClient';
 import { isApiSuccess } from '@/architecture/types/api';
@@ -24,6 +24,21 @@ export const AnalysisEnginePanel: React.FC<AnalysisEnginePanelProps> = ({
   const toast = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedEpisodeIds, setSelectedEpisodeIds] = useState<Set<string>>(new Set());
+  const [progress, setProgress] = useState<{
+    active: boolean;
+    type: 'generating' | 'extracting' | 'events' | 'deleting_narrative' | 'deleting_events' | null;
+    current: number;
+    total: number;
+    currentItemLabel: string;
+    statusText: string;
+  }>({
+    active: false,
+    type: null,
+    current: 0,
+    total: 0,
+    currentItemLabel: '',
+    statusText: '',
+  });
 
   const seriesData = useMemo(
     () => seriesList.find((series) => series.code === selectedSeriesCode) ?? null,
@@ -98,95 +113,254 @@ export const AnalysisEnginePanel: React.FC<AnalysisEnginePanelProps> = ({
   const handleGenerateMissingFiles = async () => {
     if (selectedEpisodesList.length === 0) return;
     setIsSubmitting(true);
-    for (const ep of selectedEpisodesList) {
-      toast({ title: `Processing ${ep.season}E${ep.episode}`, status: 'info', duration: 2000 });
-      if (!ep.has_plot_file && ep.has_srt_file) {
-        // SRT present, no plot -> Generate plot from SRT
-        const res = await api.generatePlotFromSrt(seriesData.code, ep.season, ep.episode);
-        if (!isApiSuccess(res)) {
-          toast({ title: `Failed for ${ep.season}E${ep.episode}`, description: res.error, status: 'error' });
+    setProgress({
+      active: true,
+      type: 'generating',
+      current: 0,
+      total: selectedEpisodesList.length,
+      currentItemLabel: '',
+      statusText: 'Starting file generation...',
+    });
+
+    try {
+      for (let i = 0; i < selectedEpisodesList.length; i++) {
+        const ep = selectedEpisodesList[i];
+        const label = `Season ${ep.season}, Episode ${ep.episode}`;
+        
+        setProgress((prev) => ({
+          ...prev,
+          current: i,
+          currentItemLabel: label,
+          statusText: 'Analyzing media assets...',
+        }));
+
+        toast({ title: `Processing ${ep.season}E${ep.episode}`, status: 'info', duration: 2000 });
+        
+        if (!ep.has_plot_file && ep.has_srt_file) {
+          setProgress((prev) => ({
+            ...prev,
+            statusText: 'Generating narrative plot summary from subtitle transcript (LLM)...',
+          }));
+          const res = await api.generatePlotFromSrt(seriesData.code, ep.season, ep.episode);
+          if (!isApiSuccess(res)) {
+            toast({ title: `Failed for ${ep.season}E${ep.episode}`, description: res.error, status: 'error' });
+          }
+        } else if (!ep.has_plot_file && !ep.has_srt_file && ep.has_video_file) {
+          setProgress((prev) => ({
+            ...prev,
+            statusText: 'Running transcription pipeline (WhisperX) and synthesizing narrative plot (LLM)...',
+          }));
+          const res = await api.fullVideoToPlot(seriesData.code, ep.season, ep.episode);
+          if (!isApiSuccess(res)) {
+            toast({ title: `Failed for ${ep.season}E${ep.episode}`, description: res.error, status: 'error' });
+          }
+        } else if (ep.has_plot_file && !ep.has_srt_file && ep.has_video_file) {
+          setProgress((prev) => ({
+            ...prev,
+            statusText: 'Transcribing voice tracks from video to subtitles (WhisperX)...',
+          }));
+          const res = await api.transcribeVideo(seriesData.code, ep.season, ep.episode);
+          if (!isApiSuccess(res)) {
+            toast({ title: `Failed for ${ep.season}E${ep.episode}`, description: res.error, status: 'error' });
+          }
+        } else if (ep.has_plot_file && !ep.has_srt_file && !ep.has_video_file) {
+          setProgress((prev) => ({
+            ...prev,
+            statusText: 'Skipping: only plot text available.',
+          }));
+          toast({
+            title: `Cannot generate for ${ep.season}E${ep.episode}`,
+            description: "Only plot available, can't generate anything from this one.",
+            status: 'warning',
+          });
+        } else if (!ep.has_plot_file && !ep.has_srt_file && !ep.has_video_file) {
+          setProgress((prev) => ({
+            ...prev,
+            statusText: 'Skipping: no source files found.',
+          }));
+          toast({
+            title: `Cannot generate for ${ep.season}E${ep.episode}`,
+            description: "No files available (Video, SRT, or Plot) to base generation on.",
+            status: 'warning',
+          });
         }
-      } else if (!ep.has_plot_file && !ep.has_srt_file && ep.has_video_file) {
-        // Video present, no SRT, no plot -> Full pipeline (Transcribe -> Plot)
-        const res = await api.fullVideoToPlot(seriesData.code, ep.season, ep.episode);
-        if (!isApiSuccess(res)) {
-          toast({ title: `Failed for ${ep.season}E${ep.episode}`, description: res.error, status: 'error' });
-        }
-      } else if (ep.has_plot_file && !ep.has_srt_file && ep.has_video_file) {
-        // Plot & Video present, no SRT -> Transcribe video to generate SRT
-        const res = await api.transcribeVideo(seriesData.code, ep.season, ep.episode);
-        if (!isApiSuccess(res)) {
-          toast({ title: `Failed for ${ep.season}E${ep.episode}`, description: res.error, status: 'error' });
-        }
-      } else if (ep.has_plot_file && !ep.has_srt_file && !ep.has_video_file) {
-        // Only plot available
-        toast({
-          title: `Cannot generate for ${ep.season}E${ep.episode}`,
-          description: "Only plot available, can't generate anything from this one.",
-          status: 'warning',
-        });
-      } else if (!ep.has_plot_file && !ep.has_srt_file && !ep.has_video_file) {
-        // Nothing available
-        toast({
-          title: `Cannot generate for ${ep.season}E${ep.episode}`,
-          description: "No files available (Video, SRT, or Plot) to base generation on.",
-          status: 'warning',
-        });
+
+        setProgress((prev) => ({
+          ...prev,
+          current: i + 1,
+        }));
       }
+      toast({ title: 'Batch generation completed', status: 'success' });
+    } catch (err: any) {
+      toast({ title: 'Error during generation', description: err.message, status: 'error' });
+    } finally {
+      setIsSubmitting(false);
+      setProgress((prev) => ({ ...prev, active: false }));
+      await onRefresh?.();
     }
-    setIsSubmitting(false);
-    toast({ title: 'Batch generation completed', status: 'success' });
-    await onRefresh?.();
   };
 
   const handleBatchNarrativeExtraction = async () => {
     if (selectedEpisodesList.length === 0) return;
     setIsSubmitting(true);
-    for (const ep of selectedEpisodesList) {
-      if (ep.narrative_arc_extraction_status === 'completed') continue;
-      if (!ep.has_plot_file) {
-         toast({ title: `Skipping ${ep.season}E${ep.episode}`, description: 'Missing plot file', status: 'warning' });
-         continue;
+    setProgress({
+      active: true,
+      type: 'extracting',
+      current: 0,
+      total: selectedEpisodesList.length,
+      currentItemLabel: '',
+      statusText: 'Starting Narrative Arc Extraction...',
+    });
+
+    try {
+      for (let i = 0; i < selectedEpisodesList.length; i++) {
+        const ep = selectedEpisodesList[i];
+        const label = `Season ${ep.season}, Episode ${ep.episode}`;
+        
+        setProgress((prev) => ({
+          ...prev,
+          current: i,
+          currentItemLabel: label,
+          statusText: 'Checking pre-requisites...',
+        }));
+
+        if (ep.narrative_arc_extraction_status === 'completed') {
+          setProgress((prev) => ({
+            ...prev,
+            statusText: 'Already completed, skipping.',
+            current: i + 1,
+          }));
+          continue;
+        }
+
+        if (!ep.has_plot_file) {
+          toast({ title: `Skipping ${ep.season}E${ep.episode}`, description: 'Missing plot file', status: 'warning' });
+          setProgress((prev) => ({
+            ...prev,
+            statusText: 'Missing plot file, skipping.',
+            current: i + 1,
+          }));
+          continue;
+        }
+
+        setProgress((prev) => ({
+          ...prev,
+          statusText: 'Extracting narrative arcs & profiling characters via Multi-Agent pipeline...',
+        }));
+
+        toast({ title: `Extracting arcs for ${ep.season}E${ep.episode}`, status: 'info', duration: 2000 });
+        const res = await api.request(
+          `/library/explorer/${seriesData.code}/${ep.season}/${ep.episode}/narrative-arc-extraction`,
+          { method: 'POST' }
+        );
+
+        if (!isApiSuccess(res)) {
+          toast({ title: `Failed for ${ep.season}E${ep.episode}`, description: res.error, status: 'error' });
+        }
+
+        setProgress((prev) => ({
+          ...prev,
+          current: i + 1,
+        }));
       }
-      toast({ title: `Extracting arcs for ${ep.season}E${ep.episode}`, status: 'info', duration: 2000 });
-      await api.request(
-        `/library/explorer/${seriesData.code}/${ep.season}/${ep.episode}/narrative-arc-extraction`,
-        { method: 'POST' }
-      );
+      toast({ title: 'Batch Narrative Arc Extraction completed', status: 'success' });
+    } catch (err: any) {
+      toast({ title: 'Error during narrative extraction', description: err.message, status: 'error' });
+    } finally {
+      setIsSubmitting(false);
+      setProgress((prev) => ({ ...prev, active: false }));
+      await onRefresh?.();
     }
-    setIsSubmitting(false);
-    toast({ title: 'Batch Narrative Arc Extraction completed', status: 'success' });
-    await onRefresh?.();
   };
 
   const handleBatchEventDrivenAnalysis = async () => {
     if (selectedEpisodesList.length === 0) return;
     setIsSubmitting(true);
-    for (const ep of selectedEpisodesList) {
-      if (ep.event_driven_video_analysis_status === 'completed') continue;
-      if (!ep.has_srt_file || (!ep.has_plot_file && ep.narrative_arc_extraction_status !== 'completed')) {
-         toast({ title: `Skipping ${ep.season}E${ep.episode}`, description: 'Missing required assets', status: 'warning' });
-         continue;
-      }
-      
-      if (ep.narrative_arc_extraction_status !== 'completed') {
-        toast({ title: `Pre-requisite: Arcs for ${ep.season}E${ep.episode}`, status: 'info', duration: 2000 });
-        const arcRes = await api.request(
-          `/library/explorer/${seriesData.code}/${ep.season}/${ep.episode}/narrative-arc-extraction`,
-          { method: 'POST' }
-        );
-        if (!isApiSuccess(arcRes)) {
-           toast({ title: `Failed pre-requisite for ${ep.season}E${ep.episode}`, status: 'error' });
-           continue;
-        }
-      }
+    setProgress({
+      active: true,
+      type: 'events',
+      current: 0,
+      total: selectedEpisodesList.length,
+      currentItemLabel: '',
+      statusText: 'Starting Event Driven Video Analysis...',
+    });
 
-      toast({ title: `Event analysis for ${ep.season}E${ep.episode}`, status: 'info', duration: 2000 });
-      await api.analyzeEpisodeEventDriven(seriesData.code, ep.season, ep.episode);
+    try {
+      for (let i = 0; i < selectedEpisodesList.length; i++) {
+        const ep = selectedEpisodesList[i];
+        const label = `Season ${ep.season}, Episode ${ep.episode}`;
+
+        setProgress((prev) => ({
+          ...prev,
+          current: i,
+          currentItemLabel: label,
+          statusText: 'Checking pre-requisites...',
+        }));
+
+        if (ep.event_driven_video_analysis_status === 'completed') {
+          setProgress((prev) => ({
+            ...prev,
+            statusText: 'Already completed, skipping.',
+            current: i + 1,
+          }));
+          continue;
+        }
+
+        if (!ep.has_srt_file || (!ep.has_plot_file && ep.narrative_arc_extraction_status !== 'completed')) {
+          toast({ title: `Skipping ${ep.season}E${ep.episode}`, description: 'Missing required assets', status: 'warning' });
+          setProgress((prev) => ({
+            ...prev,
+            statusText: 'Missing video/subtitle assets, skipping.',
+            current: i + 1,
+          }));
+          continue;
+        }
+        
+        if (ep.narrative_arc_extraction_status !== 'completed') {
+          setProgress((prev) => ({
+            ...prev,
+            statusText: 'Pre-requisite: Extracting narrative arcs first...',
+          }));
+          toast({ title: `Pre-requisite: Arcs for ${ep.season}E${ep.episode}`, status: 'info', duration: 2000 });
+          const arcRes = await api.request(
+            `/library/explorer/${seriesData.code}/${ep.season}/${ep.episode}/narrative-arc-extraction`,
+            { method: 'POST' }
+          );
+          if (!isApiSuccess(arcRes)) {
+            toast({ title: `Failed pre-requisite for ${ep.season}E${ep.episode}`, status: 'error' });
+            setProgress((prev) => ({
+              ...prev,
+              statusText: 'Failed narrative arc pre-requisite, skipping.',
+              current: i + 1,
+            }));
+            continue;
+          }
+        }
+
+        setProgress((prev) => ({
+          ...prev,
+          statusText: 'Detecting events and auto-clipping video clips (FFmpeg)...',
+        }));
+
+        toast({ title: `Event analysis for ${ep.season}E${ep.episode}`, status: 'info', duration: 2000 });
+        const res = await api.analyzeEpisodeEventDriven(seriesData.code, ep.season, ep.episode);
+        if (!isApiSuccess(res)) {
+          toast({ title: `Failed event-driven analysis for ${ep.season}E${ep.episode}`, description: res.error, status: 'error' });
+        }
+
+        setProgress((prev) => ({
+          ...prev,
+          current: i + 1,
+        }));
+      }
+      toast({ title: 'Batch Event Driven Analysis completed', status: 'success' });
+    } catch (err: any) {
+      toast({ title: 'Error during event-driven analysis', description: err.message, status: 'error' });
+    } finally {
+      setIsSubmitting(false);
+      setProgress((prev) => ({ ...prev, active: false }));
+      await onRefresh?.();
     }
-    setIsSubmitting(false);
-    toast({ title: 'Batch Event Driven Analysis completed', status: 'success' });
-    await onRefresh?.();
   };
 
   const handleBatchDeleteNarrative = async () => {
@@ -195,18 +369,54 @@ export const AnalysisEnginePanel: React.FC<AnalysisEnginePanelProps> = ({
     if (!window.confirm("Delete Narrative Arc Extraction for selected episodes? This deletes arcs/progressions from DB and Vector Store.")) return;
     
     setIsSubmitting(true);
-    // Delete in reverse chronological order to prevent intermediate state violations if interrupted
-    const reversed = [...selectedEpisodesList].reverse();
-    for (const ep of reversed) {
-      if (ep.narrative_arc_extraction_status === 'not_processed' || ep.narrative_arc_extraction_status === 'missing_files') continue;
-      await api.request(
-        `/library/explorer/${seriesData.code}/${ep.season}/${ep.episode}/reset-narrative`,
-        { method: 'POST' }
-      );
+    setProgress({
+      active: true,
+      type: 'deleting_narrative',
+      current: 0,
+      total: selectedEpisodesList.length,
+      currentItemLabel: '',
+      statusText: 'Starting Narrative Arc Reset...',
+    });
+
+    try {
+      const reversed = [...selectedEpisodesList].reverse();
+      for (let i = 0; i < reversed.length; i++) {
+        const ep = reversed[i];
+        const label = `Season ${ep.season}, Episode ${ep.episode}`;
+        
+        setProgress((prev) => ({
+          ...prev,
+          current: i,
+          currentItemLabel: label,
+          statusText: 'Resetting narrative arc extraction data...',
+        }));
+
+        if (ep.narrative_arc_extraction_status === 'not_processed' || ep.narrative_arc_extraction_status === 'missing_files') {
+          setProgress((prev) => ({
+            ...prev,
+            current: i + 1,
+          }));
+          continue;
+        }
+
+        await api.request(
+          `/library/explorer/${seriesData.code}/${ep.season}/${ep.episode}/reset-narrative`,
+          { method: 'POST' }
+        );
+
+        setProgress((prev) => ({
+          ...prev,
+          current: i + 1,
+        }));
+      }
+      toast({ title: 'Batch Narrative Reset completed', status: 'success' });
+    } catch (err: any) {
+      toast({ title: 'Error during narrative reset', description: err.message, status: 'error' });
+    } finally {
+      setIsSubmitting(false);
+      setProgress((prev) => ({ ...prev, active: false }));
+      await onRefresh?.();
     }
-    setIsSubmitting(false);
-    toast({ title: 'Batch Narrative Reset completed', status: 'success' });
-    await onRefresh?.();
   };
 
   const handleBatchDeleteEventDriven = async () => {
@@ -215,14 +425,51 @@ export const AnalysisEnginePanel: React.FC<AnalysisEnginePanelProps> = ({
     if (!window.confirm("Delete Event-Driven Analysis for selected episodes? This deletes events and extracted video clips.")) return;
     
     setIsSubmitting(true);
-    const reversed = [...selectedEpisodesList].reverse();
-    for (const ep of reversed) {
-      if (ep.event_driven_video_analysis_status === 'not_processed' || ep.event_driven_video_analysis_status === 'missing_files') continue;
-      await api.resetEventDrivenAnalysis(seriesData.code, ep.season, ep.episode);
+    setProgress({
+      active: true,
+      type: 'deleting_events',
+      current: 0,
+      total: selectedEpisodesList.length,
+      currentItemLabel: '',
+      statusText: 'Starting Event Driven Analysis Reset...',
+    });
+
+    try {
+      const reversed = [...selectedEpisodesList].reverse();
+      for (let i = 0; i < reversed.length; i++) {
+        const ep = reversed[i];
+        const label = `Season ${ep.season}, Episode ${ep.episode}`;
+        
+        setProgress((prev) => ({
+          ...prev,
+          current: i,
+          currentItemLabel: label,
+          statusText: 'Resetting event-driven analysis data...',
+        }));
+
+        if (ep.event_driven_video_analysis_status === 'not_processed' || ep.event_driven_video_analysis_status === 'missing_files') {
+          setProgress((prev) => ({
+            ...prev,
+            current: i + 1,
+          }));
+          continue;
+        }
+
+        await api.resetEventDrivenAnalysis(seriesData.code, ep.season, ep.episode);
+
+        setProgress((prev) => ({
+          ...prev,
+          current: i + 1,
+        }));
+      }
+      toast({ title: 'Batch Event Reset completed', status: 'success' });
+    } catch (err: any) {
+      toast({ title: 'Error during event reset', description: err.message, status: 'error' });
+    } finally {
+      setIsSubmitting(false);
+      setProgress((prev) => ({ ...prev, active: false }));
+      await onRefresh?.();
     }
-    setIsSubmitting(false);
-    toast({ title: 'Batch Event Reset completed', status: 'success' });
-    await onRefresh?.();
   };
 
   const renderStatusIcon = (status: string | boolean) => {
@@ -243,6 +490,74 @@ export const AnalysisEnginePanel: React.FC<AnalysisEnginePanelProps> = ({
           <Button size="sm" onClick={onSelectSeriesManager}>Series Manager</Button>
         </HStack>
       </Box>
+
+      {progress.active && (
+        <Box
+          bg="white"
+          p={6}
+          borderRadius="lg"
+          shadow="sm"
+          borderLeft="4px solid"
+          borderLeftColor={
+            progress.type === 'generating' ? 'teal.400' :
+            progress.type === 'extracting' ? 'blue.400' :
+            progress.type === 'events' ? 'cyan.400' : 'red.400'
+          }
+        >
+          <VStack align="stretch" spacing={3}>
+            <HStack justify="space-between" align="center">
+              <HStack spacing={2}>
+                <Spinner size="sm" color="blue.500" />
+                <Text fontWeight="bold" fontSize="lg">
+                  {progress.type === 'generating' && 'Batch Media Generation in Progress'}
+                  {progress.type === 'extracting' && 'Batch Narrative Arc Extraction in Progress'}
+                  {progress.type === 'events' && 'Batch Event-Driven Analysis in Progress'}
+                  {progress.type === 'deleting_narrative' && 'Batch Narrative Reset in Progress'}
+                  {progress.type === 'deleting_events' && 'Batch Event Reset in Progress'}
+                </Text>
+              </HStack>
+              <Badge colorScheme={
+                progress.type === 'generating' ? 'teal' :
+                progress.type === 'extracting' ? 'blue' :
+                progress.type === 'events' ? 'cyan' : 'red'
+              }>
+                {progress.current} / {progress.total} Completed
+              </Badge>
+            </HStack>
+            
+            <VStack align="stretch" spacing={1}>
+              <Text fontSize="sm" color="gray.600" fontWeight="semibold">
+                Processing: {progress.currentItemLabel || 'Initializing...'}
+              </Text>
+              <Text fontSize="xs" color="gray.500" fontStyle="italic">
+                Current Phase: {progress.statusText}
+              </Text>
+            </VStack>
+
+            <Box>
+              <Progress
+                value={progress.total > 0 ? (progress.current / progress.total) * 100 : 0}
+                size="sm"
+                colorScheme={
+                  progress.type === 'generating' ? 'teal' :
+                  progress.type === 'extracting' ? 'blue' :
+                  progress.type === 'events' ? 'cyan' : 'red'
+                }
+                borderRadius="md"
+                hasStripe
+                isAnimated
+              />
+              <HStack justify="space-between" mt={1}>
+                <Text fontSize="xs" color="gray.400">0%</Text>
+                <Text fontSize="xs" color="gray.400">
+                  {Math.round(progress.total > 0 ? (progress.current / progress.total) * 100 : 0)}%
+                </Text>
+                <Text fontSize="xs" color="gray.400">100%</Text>
+              </HStack>
+            </Box>
+          </VStack>
+        </Box>
+      )}
 
       <Box bg="white" p={6} borderRadius="lg" shadow="sm">
         <VStack align="stretch" spacing={4}>
