@@ -11,7 +11,7 @@ The original implementation focused entirely on **text-based paratextual inputs*
 
 ### Feature Comparison Matrix
 
-| Dimension | Previous Version (arXiv:2503.04817v1) | Current Version (ANTS) |
+| Dimension | Previous Version | Current Version (ANTS) |
 | :--- | :--- | :--- |
 | **Primary Input Modality** | Text-only paratexts (simplified Wiki plots). | Multimodal (raw video, subtitle transcripts, and plots). |
 | **Voice Transcription** | None (requires external transcription or paratexts). | **WhisperX** pipeline (automatic voice-to-text with word-level timestamps). |
