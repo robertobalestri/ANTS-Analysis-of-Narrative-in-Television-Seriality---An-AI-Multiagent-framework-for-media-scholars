@@ -1,4 +1,4 @@
-# Changes and Enhancements: ANTS Framework vs. arXiv Publication
+# Changes and Enhancements: ANTS Framework vs. previous Publication
 
 This document outlines the differences between the current release of the **ANTS (Analysis of Narrative in Television Seriality)** framework and the initial implementation described in the publication:
 > **Balestri, R. and Pescatore, G. (2025).** *Multi-Agent System for AI-Assisted Extraction of Narrative Arcs in TV Series*. In Proceedings of the 17th International Conference on Agents and Artificial Intelligence - Volume 1. DOI: [10.5220/0013369600003890](https://doi.org/10.5220/0013369600003890).
