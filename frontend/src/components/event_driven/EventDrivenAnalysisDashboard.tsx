@@ -207,8 +207,10 @@ export const EventDrivenAnalysisDashboard: React.FC<EventDrivenAnalysisDashboard
                   </Box>
                 )}
                 <Box>
-                  <Text fontSize="sm" fontWeight="bold" mb={1}>Event Type</Text>
-                  <Badge>{selectedEvent.event_type}</Badge>
+                  <Text fontSize="sm" fontWeight="bold" mb={1}>Narrative Density</Text>
+                  <Badge colorScheme="purple">
+                    {`Density: ${selectedEvent.arc_ids?.length ?? 0}`}
+                  </Badge>
                 </Box>
                 {selectedEvent.clip_path && (
                   <Box>

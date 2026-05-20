@@ -461,7 +461,7 @@ export const EventTimelineVisualizer: React.FC<EventTimelineVisualizerProps> = (
                       color: '#4A5568',
                     }}
                   >
-                    {event.event_type}
+                    {`Density: ${event.arc_ids?.length ?? 0}`}
                   </div>
                   <div
                     style={{
