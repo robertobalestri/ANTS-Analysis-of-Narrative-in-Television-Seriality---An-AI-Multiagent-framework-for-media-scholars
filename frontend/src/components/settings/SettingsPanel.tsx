@@ -16,6 +16,7 @@ import {
   AlertIcon,
   HStack,
   IconButton,
+  Link,
 } from '@chakra-ui/react';
 import { ViewIcon, ViewOffIcon } from '@chakra-ui/icons';
 import { ApiClient } from '@/services/api/ApiClient';
@@ -122,9 +123,19 @@ export const SettingsPanel: React.FC = () => {
           <Text color="gray.600">Manage your LLM credentials and application configuration.</Text>
         </Box>
 
-        <Alert status="info" variant="left-accent" borderRadius="md">
-          <AlertIcon />
-          These settings are saved to your .env file in the backend directory.
+        <Alert status="info" variant="left-accent" borderRadius="md" flexDirection="column" alignItems="flex-start" p={4}>
+          <HStack mb={2}>
+            <AlertIcon />
+            <Text fontWeight="bold">These settings are saved to your .env file in the backend directory.</Text>
+          </HStack>
+          <Box pl={6} fontSize="sm">
+            <Text color="gray.700" mb={2}>
+              To configure the software using OpenAI, simply enter your API key into both the LLM and Embedding API key fields. Then, specify your chosen LLM model name (e.g., <code>gpt-5.4</code>) and set the LLM provider to <code>openai</code>. Follow the same process for the embedding layer: enter your embedding model name (e.g., <code>text-embedding-3-large</code>) and set the embedding provider to <code>openai</code>.
+            </Text>
+            <Text color="gray.700">
+              Go to <Link href="https://openai.com/api/" isExternal color="blue.600" textDecoration="underline" fontWeight="bold">https://openai.com/api/</Link> to make your API key.
+            </Text>
+          </Box>
         </Alert>
 
         <Divider />

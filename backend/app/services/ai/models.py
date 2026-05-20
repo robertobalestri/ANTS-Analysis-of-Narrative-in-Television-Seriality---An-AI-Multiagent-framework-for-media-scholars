@@ -50,6 +50,13 @@ def get_llm() -> ChatLiteLLM:
     return _llm
 
 
+def reset_llm():
+    """Reset the global LLM instance so it gets re-initialized on next request."""
+    global _llm
+    logger.info("Resetting global LLM instance")
+    _llm = None
+
+
 class _LiteLLMEmbeddings(Embeddings):
     """LangChain Embeddings wrapper backed by litellm."""
 

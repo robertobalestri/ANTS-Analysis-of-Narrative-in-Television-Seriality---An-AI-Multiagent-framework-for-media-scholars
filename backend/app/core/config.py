@@ -29,7 +29,7 @@ REQUIRED_ENV_VARS: List[EnvVarSpec] = [
     ),
     EnvVarSpec(
         name="LLM_API_BASE",
-        required=True,
+        required=False,
         description="API base URL for the LLM provider",
     ),
     EnvVarSpec(
@@ -44,7 +44,7 @@ REQUIRED_ENV_VARS: List[EnvVarSpec] = [
     ),
     EnvVarSpec(
         name="EMBED_API_BASE",
-        required=True,
+        required=False,
         description="API base URL for the embedding provider",
     ),
     EnvVarSpec(
@@ -280,5 +280,9 @@ def save_env_vars(updates: dict):
     # Write back to file
     with open(env_path, "w") as f:
         f.writelines(new_lines)
+    
+    # Reload the environment variables with override
+    logger.info(f"Reloading environment variables from {env_path} with override=True")
+    load_dotenv(dotenv_path=env_path, override=True)
     
     return True

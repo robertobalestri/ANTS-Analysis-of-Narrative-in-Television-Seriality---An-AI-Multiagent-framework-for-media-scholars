@@ -4,6 +4,7 @@ from pydantic import BaseModel
 import os
 import logging
 from app.core.config import REQUIRED_ENV_VARS, save_env_vars
+from app.services.container import clear_services_cache
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,8 @@ async def update_env_settings(update_data: EnvUpdateSchema):
     try:
         success = save_env_vars(update_data.settings)
         if success:
-            return {"message": "Settings updated successfully. You may need to restart the server for some changes to take effect."}
+            clear_services_cache()
+            return {"message": "Settings updated and environment reloaded successfully."}
         else:
             raise HTTPException(status_code=500, detail="Failed to save settings")
     except Exception as e:
