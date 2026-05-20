@@ -10,11 +10,11 @@
 
 ## 📌 Table of Contents
 1. [Core Features](#-core-features)
-2. [Required Files for Analysis & Generation Pipelines](#-required-files-for-analysis--generation-pipelines)
-3. [Recommended End-to-End Workflow](#-recommended-end-to-end-workflow)
-4. [UI & Workspace Navigation](#-ui--workspace-navigation)
-5. [Quick Start](#-quick-start)
-6. [Environment Configuration](#-environment-configuration)
+2. [UI & Workspace Navigation](#-ui--workspace-navigation)
+3. [Quick Start](#-quick-start)
+4. [Environment Configuration](#-environment-configuration)
+5. [Required Files for Analysis & Generation Pipelines](#-required-files-for-analysis--generation-pipelines)
+6. [Recommended End-to-End Workflow](#-recommended-end-to-end-workflow)
 
 ---
 
@@ -44,41 +44,6 @@
 * **Interactive Timeline:** High-fidelity tracking of events and how they relate to narrative arcs.
 * **Annotated Video Player:** Play back auto-extracted event clips directly.
 
-
----
-
-## 📋 Required Files for Analysis & Generation Pipelines
-
-To run different types of narrative processing and analysis, you must ensure the correct source files are present in the episode directory. The dashboard indicates file presence with checkmarks/crosses.
-
-| Pipeline / Analysis Operation | Required Input Files | Output / Resulting Files | Description |
-| :--- | :--- | :--- | :--- |
-| **Subtitle-to-Plot Synthesis** | Subtitle file (`.srt`) | Plot summary (`.txt`) | Uses LLMs to summarize dialog transcripts into a linear chronological plot summary. |
-| **Video Transcription** | Video file (`.mp4`, `.mkv`, etc.) | Subtitle file (`.srt`) | Uses WhisperX to transcribe voice tracks with word-level timestamps. |
-| **Full Video-to-Plot Pipeline** | Video file (`.mp4`, `.mkv`, etc.) | Subtitle (`.srt`) & Plot (`.txt`) | Runs video transcription, then synthesizes the plot summary in one unified execution. |
-| **Multi-Agent Narrative Arc Extraction** | Plot summary (`.txt`) | SQLite & ChromaDB Vector Store artifacts | Orchestrates multi-agent analysis to extract story arcs, character profiles, and vector embeddings. |
-| **Event-Driven Video Analysis** | Video file, Subtitle file (`.srt`), **AND** Completed Narrative Arc Extraction | Mapped events & Auto-clipped video clips | Scans transcripts, slices narrative events into individual video clips via FFmpeg, and maps them to known arcs. |
-
----
-
-## 🏆 Recommended End-to-End Workflow
-
-For the easiest onboarding experience when starting with a new series, follow this step-by-step pipeline:
-
-1. **Set API Keys:** Open the **Settings** panel from the sidebar and input your LLM provider credentials.
-2. **Initialize Series:** Use the **Add Series Form** at the bottom of the sidebar to create a new series profile.
-3. **Populate Seasons & Episodes:** Navigate to the **Series Manager** and create your target seasons and episodes.
-4. **Upload Videos:** Upload the video files (`.mp4`, `.mkv`, etc.) for each episode under the **Series Manager** upload area.
-5. **Batch Generate Support Files:** Go to the **Analysis Engine** from the sidebar, select all episodes in the checklist, and click **Generate Missing Files**.
-   > [!IMPORTANT]
-   > *Transcription and plot generation runs neural speech-to-text models (WhisperX) and LLM extraction, which can take a significant amount of time depending on hardware speed (GPU/CPU) and video length.*
-6. **Scholar Review & Correction:** Because LLM-generated plot summaries serve as the foundational source material for the multi-agent narrative analysis, scholars should always review the generated plots from the **Series Manager** and make corrections (if needed) directly in the UI before running the analysis engine.
-7. **Extract Narrative Arcs:** Once the plot files are ready, select all episodes in the **Analysis Engine** and click **Start Narrative Arc** (Narrative Arc Extraction).
-8. **Explore & Visualize Narrative Arc Extraction Results:** Use the **Narrative Arcs Dashboard** to explore the extracted narrative arcs. You can merge, add, delete, and modify the narrative arcs.
-   > [!IMPORTANT]
-   > It's important to correct the narrative arcs before proceeding to the event-driven video analysis.
-9. **Perform Event-Driven Video Analysis:** After narrative arcs are successfully extracted and corrected, go back to **Analysis Engine**, select all episodes and click **Start Event Driven** (Event Driven Analysis) to generate timestamped video clips and narrative arc-to-event mappings.
-10. **Explore & Visualize Event-Driven Video Analysis Results:** Use the **Event-Driven Video Analysis Dashboard** to explore the extracted narrative events and their mappings to narrative arcs.
 
 ---
 
@@ -148,6 +113,41 @@ The framework manages variables dynamically via the **Settings UI**.
 | **LLM_PROVIDER** | `""` (derived) | Provider engine string (`openai`, `azure`, `anthropic`, `ollama`). |
 | **EMBED_PROVIDER** | `""` (derived) | Embedding engine string (`openai`, `azure`, `cohere`). |
 | **EMBED_MODEL** | `embed-v-4-0` | Model configuration string for text vectorization. |
+
+---
+
+## 📋 Required Files for Analysis & Generation Pipelines
+
+To run different types of narrative processing and analysis, you must ensure the correct source files are present in the episode directory. The dashboard indicates file presence with checkmarks/crosses.
+
+| Pipeline / Analysis Operation | Required Input Files | Output / Resulting Files | Description |
+| :--- | :--- | :--- | :--- |
+| **Subtitle-to-Plot Synthesis** | Subtitle file (`.srt`) | Plot summary (`.txt`) | Uses LLMs to summarize dialog transcripts into a linear chronological plot summary. |
+| **Video Transcription** | Video file (`.mp4`, `.mkv`, etc.) | Subtitle file (`.srt`) | Uses WhisperX to transcribe voice tracks with word-level timestamps. |
+| **Full Video-to-Plot Pipeline** | Video file (`.mp4`, `.mkv`, etc.) | Subtitle (`.srt`) & Plot (`.txt`) | Runs video transcription, then synthesizes the plot summary in one unified execution. |
+| **Multi-Agent Narrative Arc Extraction** | Plot summary (`.txt`) | SQLite & ChromaDB Vector Store artifacts | Orchestrates multi-agent analysis to extract story arcs, character profiles, and vector embeddings. |
+| **Event-Driven Video Analysis** | Video file, Subtitle file (`.srt`), **AND** Completed Narrative Arc Extraction | Mapped events & Auto-clipped video clips | Scans transcripts, slices narrative events into individual video clips via FFmpeg, and maps them to known arcs. |
+
+---
+
+## 🏆 Recommended End-to-End Workflow
+
+For the easiest onboarding experience when starting with a new series, follow this step-by-step pipeline:
+
+1. **Set API Keys:** Open the **Settings** panel from the sidebar and input your LLM provider credentials.
+2. **Initialize Series:** Use the **Add Series Form** at the bottom of the sidebar to create a new series profile.
+3. **Populate Seasons & Episodes:** Navigate to the **Series Manager** and create your target seasons and episodes.
+4. **Upload Videos:** Upload the video files (`.mp4`, `.mkv`, etc.) for each episode under the **Series Manager** upload area.
+5. **Batch Generate Support Files:** Go to the **Analysis Engine** from the sidebar, select all episodes in the checklist, and click **Generate Missing Files**.
+   > [!IMPORTANT]
+   > *Transcription and plot generation runs neural speech-to-text models (WhisperX) and LLM extraction, which can take a significant amount of time depending on hardware speed (GPU/CPU) and video length.*
+6. **Scholar Review & Correction:** Because LLM-generated plot summaries serve as the foundational source material for the multi-agent narrative analysis, scholars should always review the generated plots from the **Series Manager** and make corrections (if needed) directly in the UI before running the analysis engine.
+7. **Extract Narrative Arcs:** Once the plot files are ready, select all episodes in the **Analysis Engine** and click **Start Narrative Arc** (Narrative Arc Extraction).
+8. **Explore & Visualize Narrative Arc Extraction Results:** Use the **Narrative Arcs Dashboard** to explore the extracted narrative arcs. You can merge, add, delete, and modify the narrative arcs.
+   > [!IMPORTANT]
+   > It's important to correct the narrative arcs before proceeding to the event-driven video analysis.
+9. **Perform Event-Driven Video Analysis:** After narrative arcs are successfully extracted and corrected, go back to **Analysis Engine**, select all episodes and click **Start Event Driven** (Event Driven Analysis) to generate timestamped video clips and narrative arc-to-event mappings.
+10. **Explore & Visualize Event-Driven Video Analysis Results:** Use the **Event-Driven Video Analysis Dashboard** to explore the extracted narrative events and their mappings to narrative arcs.
 
 ---
 
