@@ -95,7 +95,32 @@ async def analyze_episode(series: str, body: EventDrivenVideoAnalysisRequest) ->
     with db_manager.session_scope() as session:
         arc_repo = NarrativeArcRepository(session)
         arcs = arc_repo.get_all(series=series)
-        if arcs:
+        
+        target_season = body.season.upper().strip()
+        target_episode = body.episode.upper().strip()
+        
+        logger.info(f"Retrieved {len(arcs)} total arcs for series '{series}'. Filtering for {target_season}{target_episode}...")
+        
+        valid_arcs = []
+        for arc in arcs:
+            if arc.arc_type == "Anthology Arc":
+                # Check if it has a progression for the specific episode being analyzed
+                progressions_in_episode = [
+                    prog for prog in arc.progressions
+                    if prog.season.upper().strip() == target_season and prog.episode.upper().strip() == target_episode
+                ]
+                is_part_of_episode = len(progressions_in_episode) > 0
+                if not is_part_of_episode:
+                    logger.info(f"Skipping Anthology Arc '{arc.title}' (ID: {arc.id}) - not part of {target_season}{target_episode}")
+                    continue
+                else:
+                    logger.info(f"Keeping Anthology Arc '{arc.title}' (ID: {arc.id}) - has {len(progressions_in_episode)} progression(s) in {target_season}{target_episode}")
+            else:
+                logger.info(f"Keeping Series/Season Arc '{arc.title}' (ID: {arc.id}, Type: {arc.arc_type})")
+            valid_arcs.append(arc)
+
+        if valid_arcs:
+            logger.info(f"Passing {len(valid_arcs)} valid arcs to assign_arcs_to_events: {[a.title for a in valid_arcs]}")
             arc_dicts = [
                 {
                     "id": str(arc.id),
@@ -103,15 +128,15 @@ async def analyze_episode(series: str, body: EventDrivenVideoAnalysisRequest) ->
                     "description": arc.description,
                     "main_characters": [char.best_appellation for char in arc.main_characters]
                 }
-                for arc in arcs
+                for arc in valid_arcs
             ]
             assignments = await assign_arcs_to_events(events, arc_dicts)
             update_events_with_arcs(events, assignments)
             for event in events:
                 store.add_event(event)
-            logger.info(f"Assigned arcs to {len(events)} events")
+            logger.info(f"Assigned arcs to {len(events)} events using {len(valid_arcs)} valid arcs")
         else:
-            logger.info(f"No arcs for series {series}, skipping arc assignment")
+            logger.info(f"No valid arcs for series {series} in episode {episode_ref}, skipping arc assignment")
 
     # 4. Extract video clips
     if video_path:
@@ -127,6 +152,22 @@ async def analyze_episode(series: str, body: EventDrivenVideoAnalysisRequest) ->
 
     # 5. Save
     store.save()
+
+    # 6. Update Database Status
+    with db_manager.session_scope() as session:
+        from app.models.narrative import EpisodeMetadata, SeasonMetadata
+        from sqlmodel import select
+        stmt = (
+            select(EpisodeMetadata)
+            .join(SeasonMetadata)
+            .where(SeasonMetadata.series_code == series.upper())
+            .where(SeasonMetadata.season_code == body.season.upper())
+            .where(EpisodeMetadata.episode_code == body.episode.upper())
+        )
+        db_episode = session.exec(stmt).first()
+        if db_episode:
+            db_episode.event_driven_video_analysis_status = "completed"
+            session.add(db_episode)
 
     return {
         "episode_ref": episode_ref,
@@ -179,9 +220,23 @@ async def reset_episode_events(series: str, season: str, episode: str) -> dict:
             logger.info(f"Deleted event clips folder: {clip_output_dir}")
         except Exception as e:
             logger.warning(f"Failed to delete event clips folder {clip_output_dir}: {e}")
-            
-    return {"reset": True, "episode_ref": episode_ref, "removed_events_count": len(nodes_to_remove)}
+    # 3. Update Database Status
+    with db_manager.session_scope() as session:
+        from app.models.narrative import EpisodeMetadata, SeasonMetadata
+        from sqlmodel import select
+        stmt = (
+            select(EpisodeMetadata)
+            .join(SeasonMetadata)
+            .where(SeasonMetadata.series_code == series.upper())
+            .where(SeasonMetadata.season_code == season.upper())
+            .where(EpisodeMetadata.episode_code == episode.upper())
+        )
+        db_episode = session.exec(stmt).first()
+        if db_episode:
+            db_episode.event_driven_video_analysis_status = "not_processed"
+            session.add(db_episode)
 
+    return {"reset": True, "episode_ref": episode_ref, "removed_events_count": len(nodes_to_remove)}
 
 @router.get("/{series}/clips/{season}/{episode}/clips/{clip_filename:path}")
 async def get_clip(series: str, season: str, episode: str, clip_filename: str) -> FileResponse:

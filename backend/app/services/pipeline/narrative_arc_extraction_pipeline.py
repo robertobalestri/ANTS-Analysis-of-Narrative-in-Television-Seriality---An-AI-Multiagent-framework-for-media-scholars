@@ -130,7 +130,7 @@ async def analyze_series(series: str, season: str, episodes: range | None = None
 
 
 def _update_episode_status(series: str, season: str, episode: str, status: str) -> None:
-    """Update episode analysis_status in the database."""
+    """Update episode narrative_arc_extraction_status in the database."""
     from app.repositories import DatabaseSessionManager
     from app.models.narrative import EpisodeMetadata, SeasonMetadata
     from sqlmodel import select
@@ -153,16 +153,14 @@ def _update_episode_status(series: str, season: str, episode: str, status: str) 
                 )
             ).first()
             if episode_meta:
-                episode_meta.analysis_status = status
+                episode_meta.narrative_arc_extraction_status = status
+                session.add(episode_meta)
                 session.commit()
+                logger.info(f"Updated status for {series} {season} {episode} to {status}")
             else:
-                # Create the episode row if it doesn't exist
-                new_ep = EpisodeMetadata(
-                    season_id=season_meta.id,
-                    episode_code=episode.upper(),
-                    analysis_status=status,
+                logger.warning(
+                    f"Episode {episode} not found in DB for {series} {season}. "
+                    f"Could not update narrative_arc_extraction_status={status}"
                 )
-                session.add(new_ep)
-                session.commit()
     except Exception as e:
         logger.error(f"Failed to update episode status: {e}")

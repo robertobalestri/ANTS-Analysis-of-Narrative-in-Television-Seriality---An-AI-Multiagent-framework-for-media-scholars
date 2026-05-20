@@ -122,7 +122,7 @@ class LibraryExplorerService:
                 progression_counts,
                 self._db_statuses,
             )
-            if status["analysis_status"] == "pending":
+            if status["narrative_arc_extraction_status"] == "pending":
                 # sync method, run synchronously
                 self._generate_plot_sync(normalized_series, normalized_season, episode_dir.name)
                 generated_episodes.append(episode_dir.name)
@@ -164,8 +164,8 @@ class LibraryExplorerService:
             self._load_progression_counts(),
             self._db_statuses,
         )
-        if status["analysis_status"] not in ("pending", "error"):
-            raise ValueError(f"Episode is not ready for analysis (status: {status['analysis_status']})")
+        if status["narrative_arc_extraction_status"] not in ("pending", "error"):
+            raise ValueError(f"Episode is not ready for analysis (status: {status['narrative_arc_extraction_status']})")
 
         await self.analysis_service.run_narrative_arc_extraction(normalized_series, normalized_season, normalized_episode)
         return self._build_episode_status(
@@ -194,7 +194,7 @@ class LibraryExplorerService:
                 progression_counts,
                 self._db_statuses,
             )
-            if status["analysis_status"] in ("pending", "error"):
+            if status["narrative_arc_extraction_status"] in ("pending", "error"):
                 await self.analysis_service.run_narrative_arc_extraction(normalized_series, normalized_season, episode_dir.name)
                 processed_episodes.append(episode_dir.name)
 
@@ -214,7 +214,8 @@ class LibraryExplorerService:
                 if ep.season:
                     series_code = ep.season.series_code
                     statuses[(series_code, ep.season.season_code, ep.episode_code)] = {
-                        "analysis_status": ep.analysis_status,
+                        "narrative_arc_extraction_status": ep.narrative_arc_extraction_status,
+                        "event_driven_video_analysis_status": ep.event_driven_video_analysis_status,
                         "clips_completed": ep.clips_completed
                     }
         return statuses
@@ -235,7 +236,8 @@ class LibraryExplorerService:
             season_code, 
             episode_code, 
             progression_count, 
-            db_status=db_info["analysis_status"] if db_info else None,
+            db_status=db_info["narrative_arc_extraction_status"] if db_info else None,
+            db_event_status=db_info["event_driven_video_analysis_status"] if db_info else None,
             db_clips_completed=db_info["clips_completed"] if db_info else False
         )
 

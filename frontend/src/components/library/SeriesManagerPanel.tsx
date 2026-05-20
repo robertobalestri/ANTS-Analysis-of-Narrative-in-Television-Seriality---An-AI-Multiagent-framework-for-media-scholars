@@ -24,7 +24,7 @@ interface ExplorerEpisodeStatus {
   has_dialogue_json: boolean;
   has_analysis_artifacts: boolean;
   progression_count: number;
-  analysis_status: 'completed' | 'error' | 'pending' | 'not_processed' | 'missing_files';
+  narrative_arc_extraction_status: 'completed' | 'error' | 'pending' | 'not_processed' | 'missing_files';
 }
 
 interface ExplorerSeason {
@@ -53,7 +53,7 @@ export const SeriesManagerPanel: React.FC<SeriesManagerPanelProps> = ({ seriesDa
 
   const orderedSeasons = useMemo(() => seriesData?.seasons ?? [], [seriesData]);
 
-  const statusLabel = (status: ExplorerEpisodeStatus['analysis_status']) => {
+  const statusLabel = (status: ExplorerEpisodeStatus['narrative_arc_extraction_status']) => {
     if (status === 'completed') return 'Analyzed';
     if (status === 'error') return 'Error';
     if (status === 'pending') return 'Ready';
@@ -173,7 +173,7 @@ export const SeriesManagerPanel: React.FC<SeriesManagerPanelProps> = ({ seriesDa
             {season.episodes.map((episode) => (
               <Box key={`${season.season}-${episode.episode}`} borderWidth="1px" borderRadius="md" p={4}>
                 <Text fontWeight="medium" mb={2}>{episode.episode}</Text>
-                <Text fontSize="sm" color="gray.600" mb={3}>Status: {statusLabel(episode.analysis_status)}</Text>
+                <Text fontSize="sm" color="gray.600" mb={3}>Status: {statusLabel(episode.narrative_arc_extraction_status)}</Text>
                 <Box
                   border="2px dashed"
                   borderColor="gray.200"

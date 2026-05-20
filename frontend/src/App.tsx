@@ -205,8 +205,8 @@ const App: React.FC = () => {
                 {([
                   { key: 'series-manager', label: 'Series Manager & File Upload' },
                   { key: 'analysis-engine', label: 'Analysis Engine' },
-                  { key: 'event-driven-analysis', label: 'Event Driven Video Analysis' },
                   { key: 'visualization-dashboard', label: 'Narrative Arcs Dashboard' },
+                  { key: 'event-driven-analysis', label: 'Event Driven Video Analysis' },
                   { key: 'settings', label: 'Settings' },
                 ] as const).map(({ key, label }) => (
                   <Button

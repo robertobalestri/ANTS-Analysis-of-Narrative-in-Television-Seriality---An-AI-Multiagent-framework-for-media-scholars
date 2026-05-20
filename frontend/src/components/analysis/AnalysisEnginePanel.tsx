@@ -1,11 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { Badge, Box, Button, HStack, Select, SimpleGrid, Text, VStack, useToast, IconButton } from '@chakra-ui/react';
-import { DeleteIcon } from '@chakra-ui/icons';
+import { Box, Button, HStack, Text, VStack, useToast, Table, Thead, Tbody, Tr, Th, Td, Checkbox, Icon, Tooltip } from '@chakra-ui/react';
+import { CheckCircleIcon, WarningIcon, CloseIcon, TimeIcon } from '@chakra-ui/icons';
 import { ApiClient } from '@/services/api/ApiClient';
 import { isApiSuccess } from '@/architecture/types/api';
-
 import type { ExplorerSeries } from '@/architecture/types';
-import { isApiError } from '@/architecture/types/api';
 
 interface AnalysisEnginePanelProps {
   seriesList: ExplorerSeries[];
@@ -20,24 +18,41 @@ const api = ApiClient.getInstance();
 export const AnalysisEnginePanel: React.FC<AnalysisEnginePanelProps> = ({
   seriesList,
   selectedSeriesCode,
-  onSelectSeries: _, // Mark as unused
   onSelectSeriesManager,
   onRefresh,
 }) => {
   const toast = useToast();
-  const [selectedSeason, setSelectedSeason] = useState('');
-  const [selectedEpisode, setSelectedEpisode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedEpisodeIds, setSelectedEpisodeIds] = useState<Set<string>>(new Set());
 
   const seriesData = useMemo(
     () => seriesList.find((series) => series.code === selectedSeriesCode) ?? null,
     [seriesList, selectedSeriesCode]
   );
-  const seasons = useMemo(() => seriesData?.seasons ?? [], [seriesData]);
-  const episodesForSeason = useMemo(
-    () => seasons.find((season) => season.season === selectedSeason)?.episodes ?? [],
-    [seasons, selectedSeason]
-  );
+  
+  // Flatten episodes to simplify table rendering and sequential logic
+  const flatEpisodes = useMemo(() => {
+    if (!seriesData?.seasons) return [];
+    return seriesData.seasons.flatMap(s => s.episodes).sort((a, b) => {
+      if (a.season !== b.season) return a.season.localeCompare(b.season);
+      return a.episode.localeCompare(b.episode);
+    });
+  }, [seriesData]);
+
+  const toggleSelection = (id: string) => {
+    const newSet = new Set(selectedEpisodeIds);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    setSelectedEpisodeIds(newSet);
+  };
+
+  const toggleAll = () => {
+    if (selectedEpisodeIds.size === flatEpisodes.length) {
+      setSelectedEpisodeIds(new Set());
+    } else {
+      setSelectedEpisodeIds(new Set(flatEpisodes.map(e => `${e.season}-${e.episode}`)));
+    }
+  };
 
   if (!seriesData) {
     return (
@@ -47,183 +62,175 @@ export const AnalysisEnginePanel: React.FC<AnalysisEnginePanelProps> = ({
     );
   }
 
-  const seasonCount = seriesData.seasons?.length ?? 0;
-  const episodeCount = seriesData.seasons?.reduce((total, season) => total + season.episodes.length, 0) ?? 0;
-  const processedCount = seriesData.seasons?.reduce(
-    (total, season) => total + season.episodes.filter((episode) => episode.analysis_status === 'completed').length,
-    0
-  ) ?? 0;
-  const errorCount = seriesData.seasons?.reduce(
-    (total, season) => total + season.episodes.filter((episode) => episode.analysis_status === 'error').length,
-    0
-  ) ?? 0;
+  const selectedEpisodesList = flatEpisodes.filter(e => selectedEpisodeIds.has(`${e.season}-${e.episode}`));
 
-  const handleNarrativeArcExtraction = async () => {
-    if (!seriesData || !selectedSeason || !selectedEpisode) {
-      return;
+  // Validates if the selected items for deletion obey the sequential constraint
+  const validateSequentialDeletion = (statusKey: 'narrative_arc_extraction_status' | 'event_driven_video_analysis_status') => {
+    // If I am deleting i, all j > i that are 'completed' MUST also be selected for deletion.
+    let earliestSelectedIndex = -1;
+    for (let i = 0; i < flatEpisodes.length; i++) {
+      if (selectedEpisodeIds.has(`${flatEpisodes[i].season}-${flatEpisodes[i].episode}`)) {
+        earliestSelectedIndex = i;
+        break;
+      }
     }
 
+    if (earliestSelectedIndex === -1) return true; // nothing selected
+
+    for (let i = earliestSelectedIndex; i < flatEpisodes.length; i++) {
+      const ep = flatEpisodes[i];
+      const isSelected = selectedEpisodeIds.has(`${ep.season}-${ep.episode}`);
+      const isCompleted = ep[statusKey] === 'completed';
+      
+      if (isCompleted && !isSelected) {
+        toast({
+          title: 'Sequential Constraint Violated',
+          description: `You cannot delete analysis for earlier episodes if subsequent episodes (like ${ep.season}E${ep.episode}) have completed analysis. Please select them as well.`,
+          status: 'warning',
+          duration: 6000,
+        });
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const handleGenerateMissingFiles = async () => {
+    if (selectedEpisodesList.length === 0) return;
     setIsSubmitting(true);
-    const response = await api.request(
-      `/library/explorer/${seriesData.code}/${selectedSeason}/${selectedEpisode}/narrative-arc-extraction`,
-      { method: 'POST' }
-    );
-    setIsSubmitting(false);
-
-    if (!isApiSuccess(response)) {
-      const errorMsg = isApiError(response) ? response.error : 'Arc extraction failed';
-      toast({ title: 'Unable to extract arcs', description: errorMsg, status: 'error' });
-      return;
+    for (const ep of selectedEpisodesList) {
+      toast({ title: `Processing ${ep.season}E${ep.episode}`, status: 'info', duration: 2000 });
+      if (!ep.has_plot_file && ep.has_srt_file) {
+        // SRT present, no plot -> Generate plot from SRT
+        const res = await api.generatePlotFromSrt(seriesData.code, ep.season, ep.episode);
+        if (!isApiSuccess(res)) {
+          toast({ title: `Failed for ${ep.season}E${ep.episode}`, description: res.error, status: 'error' });
+        }
+      } else if (!ep.has_plot_file && !ep.has_srt_file && ep.has_video_file) {
+        // Video present, no SRT, no plot -> Full pipeline (Transcribe -> Plot)
+        const res = await api.fullVideoToPlot(seriesData.code, ep.season, ep.episode);
+        if (!isApiSuccess(res)) {
+          toast({ title: `Failed for ${ep.season}E${ep.episode}`, description: res.error, status: 'error' });
+        }
+      } else if (ep.has_plot_file && !ep.has_srt_file && ep.has_video_file) {
+        // Plot & Video present, no SRT -> Transcribe video to generate SRT
+        const res = await api.transcribeVideo(seriesData.code, ep.season, ep.episode);
+        if (!isApiSuccess(res)) {
+          toast({ title: `Failed for ${ep.season}E${ep.episode}`, description: res.error, status: 'error' });
+        }
+      } else if (ep.has_plot_file && !ep.has_srt_file && !ep.has_video_file) {
+        // Only plot available
+        toast({
+          title: `Cannot generate for ${ep.season}E${ep.episode}`,
+          description: "Only plot available, can't generate anything from this one.",
+          status: 'warning',
+        });
+      } else if (!ep.has_plot_file && !ep.has_srt_file && !ep.has_video_file) {
+        // Nothing available
+        toast({
+          title: `Cannot generate for ${ep.season}E${ep.episode}`,
+          description: "No files available (Video, SRT, or Plot) to base generation on.",
+          status: 'warning',
+        });
+      }
     }
-
-    toast({ title: 'Narrative arc extraction completed', status: 'success' });
+    setIsSubmitting(false);
+    toast({ title: 'Batch generation completed', status: 'success' });
     await onRefresh?.();
   };
 
-  const handleAnalyzeSeason = async () => {
-    if (!seriesData || !selectedSeason) {
-      return;
-    }
-
+  const handleBatchNarrativeExtraction = async () => {
+    if (selectedEpisodesList.length === 0) return;
     setIsSubmitting(true);
-    const response = await api.request(
-      `/library/explorer/${seriesData.code}/${selectedSeason}/analyze-ready`,
-      { method: 'POST' }
-    );
-    setIsSubmitting(false);
-
-    if (!isApiSuccess(response)) {
-      const errorMsg = isApiError(response) ? response.error : 'Analysis failed';
-      toast({ title: 'Unable to analyze season', description: errorMsg, status: 'error' });
-      return;
+    for (const ep of selectedEpisodesList) {
+      if (ep.narrative_arc_extraction_status === 'completed') continue;
+      if (!ep.has_plot_file) {
+         toast({ title: `Skipping ${ep.season}E${ep.episode}`, description: 'Missing plot file', status: 'warning' });
+         continue;
+      }
+      toast({ title: `Extracting arcs for ${ep.season}E${ep.episode}`, status: 'info', duration: 2000 });
+      await api.request(
+        `/library/explorer/${seriesData.code}/${ep.season}/${ep.episode}/narrative-arc-extraction`,
+        { method: 'POST' }
+      );
     }
-
-    toast({ title: 'Season analysis completed', status: 'success' });
+    setIsSubmitting(false);
+    toast({ title: 'Batch Narrative Arc Extraction completed', status: 'success' });
     await onRefresh?.();
   };
 
-  const handleAnalyzeSeries = async () => {
-    if (!seriesData) {
-      return;
-    }
-
+  const handleBatchEventDrivenAnalysis = async () => {
+    if (selectedEpisodesList.length === 0) return;
     setIsSubmitting(true);
-    const response = await api.analyzeLibrarySeries(seriesData.code);
-    setIsSubmitting(false);
+    for (const ep of selectedEpisodesList) {
+      if (ep.event_driven_video_analysis_status === 'completed') continue;
+      if (!ep.has_srt_file || (!ep.has_plot_file && ep.narrative_arc_extraction_status !== 'completed')) {
+         toast({ title: `Skipping ${ep.season}E${ep.episode}`, description: 'Missing required assets', status: 'warning' });
+         continue;
+      }
+      
+      if (ep.narrative_arc_extraction_status !== 'completed') {
+        toast({ title: `Pre-requisite: Arcs for ${ep.season}E${ep.episode}`, status: 'info', duration: 2000 });
+        const arcRes = await api.request(
+          `/library/explorer/${seriesData.code}/${ep.season}/${ep.episode}/narrative-arc-extraction`,
+          { method: 'POST' }
+        );
+        if (!isApiSuccess(arcRes)) {
+           toast({ title: `Failed pre-requisite for ${ep.season}E${ep.episode}`, status: 'error' });
+           continue;
+        }
+      }
 
-    if (!isApiSuccess(response)) {
-      const errorMsg = isApiError(response) ? response.error : 'Analysis failed';
-      toast({ title: 'Unable to analyze series', description: errorMsg, status: 'error' });
-      return;
+      toast({ title: `Event analysis for ${ep.season}E${ep.episode}`, status: 'info', duration: 2000 });
+      await api.analyzeEpisodeEventDriven(seriesData.code, ep.season, ep.episode);
     }
-
-    toast({ title: 'Series analysis started', status: 'success' });
+    setIsSubmitting(false);
+    toast({ title: 'Batch Event Driven Analysis completed', status: 'success' });
     await onRefresh?.();
   };
 
-  const handleGeneratePlotFromVideo = async () => {
-    if (!seriesData || !selectedSeason || !selectedEpisode) return;
-    setIsSubmitting(true);
-    const response = await api.fullVideoToPlot(seriesData.code, selectedSeason, selectedEpisode);
-    setIsSubmitting(false);
-    if (isApiSuccess(response)) {
-      toast({ title: 'Plot generated from video', status: 'success' });
-      await onRefresh?.();
-    } else {
-      toast({ title: 'Generation failed', description: response.error, status: 'error' });
-    }
-  };
-
-  const handleGeneratePlotFromSrt = async () => {
-    if (!seriesData || !selectedSeason || !selectedEpisode) return;
-    setIsSubmitting(true);
-    const response = await api.generatePlotFromSrt(seriesData.code, selectedSeason, selectedEpisode);
-    setIsSubmitting(false);
-    if (isApiSuccess(response)) {
-      toast({ title: 'Plot generated from SRT', status: 'success' });
-      await onRefresh?.();
-    } else {
-      toast({ title: 'Generation failed', description: response.error, status: 'error' });
-    }
-  };
-
-  const handleExtractNarrativeArcs = async () => {
-    await handleNarrativeArcExtraction();
-  };
-
-  const handleSemanticSceneSplitting = async () => {
-    if (!seriesData || !selectedSeason || !selectedEpisode) return;
-    setIsSubmitting(true);
-    const response = await api.analyzeVideoScenes(seriesData.code, selectedSeason, selectedEpisode);
-    setIsSubmitting(false);
-    if (isApiSuccess(response)) {
-      toast({ title: 'Video scenes extracted', status: 'success' });
-      await onRefresh?.();
-    } else {
-      toast({ title: 'Extraction failed', description: response.error, status: 'error' });
-    }
-  };
-
-  const handleResetNarrative = async () => {
-    if (!seriesData || !selectedSeason || !selectedEpisode) return;
-    if (!window.confirm("Are you sure you want to reset narrative arcs? This will delete all arcs, characters, and progressions for this episode from DB and Vector Store.")) return;
+  const handleBatchDeleteNarrative = async () => {
+    if (selectedEpisodesList.length === 0) return;
+    if (!validateSequentialDeletion('narrative_arc_extraction_status')) return;
+    if (!window.confirm("Delete Narrative Arc Extraction for selected episodes? This deletes arcs/progressions from DB and Vector Store.")) return;
     
     setIsSubmitting(true);
-    const response = await api.request(
-      `/library/explorer/${seriesData.code}/${selectedSeason}/${selectedEpisode}/reset-narrative`,
-      { method: 'POST' }
-    );
-    setIsSubmitting(false);
-    
-    if (isApiSuccess(response)) {
-      toast({ title: 'Narrative reset successful', status: 'success' });
-      await onRefresh?.();
-    } else {
-      const errorMsg = isApiError(response) ? response.error : 'Reset failed';
-      toast({ title: 'Reset failed', description: errorMsg, status: 'error' });
+    // Delete in reverse chronological order to prevent intermediate state violations if interrupted
+    const reversed = [...selectedEpisodesList].reverse();
+    for (const ep of reversed) {
+      if (ep.narrative_arc_extraction_status === 'not_processed' || ep.narrative_arc_extraction_status === 'missing_files') continue;
+      await api.request(
+        `/library/explorer/${seriesData.code}/${ep.season}/${ep.episode}/reset-narrative`,
+        { method: 'POST' }
+      );
     }
+    setIsSubmitting(false);
+    toast({ title: 'Batch Narrative Reset completed', status: 'success' });
+    await onRefresh?.();
   };
 
-  const handleResetVideo = async () => {
-    if (!seriesData || !selectedSeason || !selectedEpisode) return;
-    if (!window.confirm("Are you sure you want to delete all extracted video clips for this episode?")) return;
-
+  const handleBatchDeleteEventDriven = async () => {
+    if (selectedEpisodesList.length === 0) return;
+    if (!validateSequentialDeletion('event_driven_video_analysis_status')) return;
+    if (!window.confirm("Delete Event-Driven Analysis for selected episodes? This deletes events and extracted video clips.")) return;
+    
     setIsSubmitting(true);
-    const response = await api.request(
-      `/library/explorer/${seriesData.code}/${selectedSeason}/${selectedEpisode}/reset-video`,
-      { method: 'POST' }
-    );
-    setIsSubmitting(false);
-    
-    if (isApiSuccess(response)) {
-      toast({ title: 'Video clips reset successful', status: 'success' });
-      await onRefresh?.();
-    } else {
-      const errorMsg = isApiError(response) ? response.error : 'Reset failed';
-      toast({ title: 'Reset failed', description: errorMsg, status: 'error' });
+    const reversed = [...selectedEpisodesList].reverse();
+    for (const ep of reversed) {
+      if (ep.event_driven_video_analysis_status === 'not_processed' || ep.event_driven_video_analysis_status === 'missing_files') continue;
+      await api.resetEventDrivenAnalysis(seriesData.code, ep.season, ep.episode);
     }
+    setIsSubmitting(false);
+    toast({ title: 'Batch Event Reset completed', status: 'success' });
+    await onRefresh?.();
   };
 
-  const handleResetEventAnalysis = async () => {
-    if (!seriesData || !selectedSeason || !selectedEpisode) return;
-    if (!window.confirm("Are you sure you want to delete all extracted events and event video clips for this episode?")) return;
-
-    setIsSubmitting(true);
-    const response = await api.resetEventDrivenAnalysis(seriesData.code, selectedSeason, selectedEpisode);
-    setIsSubmitting(false);
-    
-    if (isApiSuccess(response)) {
-      toast({ title: 'Event analysis reset successful', status: 'success' });
-      await onRefresh?.();
-    } else {
-      const errorMsg = isApiError(response) ? response.error : 'Reset failed';
-      toast({ title: 'Reset failed', description: errorMsg, status: 'error' });
-    }
+  const renderStatusIcon = (status: string | boolean) => {
+    if (status === true || status === 'completed') return <Icon as={CheckCircleIcon} color="green.500" />;
+    if (status === 'error') return <Icon as={WarningIcon} color="red.500" />;
+    if (status === 'pending') return <Icon as={TimeIcon} color="yellow.500" />;
+    return <Icon as={CloseIcon} color="gray.300" />;
   };
-
-  const currentEpisodeData = useMemo(() => {
-    return episodesForSeason.find(e => e.episode === selectedEpisode);
-  }, [episodesForSeason, selectedEpisode]);
 
   return (
     <VStack align="stretch" spacing={6}>
@@ -233,284 +240,76 @@ export const AnalysisEnginePanel: React.FC<AnalysisEnginePanelProps> = ({
             <Text fontSize="2xl" fontWeight="bold" color="blue.600">{seriesData.display_name}</Text>
             <Text fontSize="sm" color="gray.500" fontWeight="medium">Analysis Engine Dashboard | {seriesData.code}</Text>
           </VStack>
-          <Badge colorScheme="blue" variant="subtle" px={3} py={1} borderRadius="full">
-            Series Selected
-          </Badge>
+          <Button size="sm" onClick={onSelectSeriesManager}>Series Manager</Button>
         </HStack>
       </Box>
 
-      {/* Series Summary */}
       <Box bg="white" p={6} borderRadius="lg" shadow="sm">
-        <HStack justify="space-between" mb={4}>
-          <Text fontWeight="bold">Series Readiness Summary</Text>
-          <HStack>
-            <Button size="sm" onClick={handleAnalyzeSeries} isLoading={isSubmitting}>Analyze Whole Series</Button>
-            <Button size="sm" onClick={onSelectSeriesManager}>Series Manager</Button>
+        <VStack align="stretch" spacing={4}>
+          <HStack justify="space-between" align="center" flexWrap="wrap" gap={2}>
+            <Text fontWeight="bold">Batch Actions ({selectedEpisodeIds.size} selected)</Text>
+            <HStack spacing={2} flexWrap="wrap">
+              <Button size="sm" colorScheme="teal" onClick={handleGenerateMissingFiles} isDisabled={selectedEpisodeIds.size === 0 || isSubmitting} isLoading={isSubmitting}>
+                Generate Missing Files
+              </Button>
+              <Button size="sm" colorScheme="blue" onClick={handleBatchNarrativeExtraction} isDisabled={selectedEpisodeIds.size === 0 || isSubmitting} isLoading={isSubmitting}>
+                Start Narrative Arc
+              </Button>
+              <Button size="sm" colorScheme="cyan" onClick={handleBatchEventDrivenAnalysis} isDisabled={selectedEpisodeIds.size === 0 || isSubmitting} isLoading={isSubmitting}>
+                Start Event Driven
+              </Button>
+              <Button size="sm" colorScheme="red" variant="outline" onClick={handleBatchDeleteNarrative} isDisabled={selectedEpisodeIds.size === 0 || isSubmitting} isLoading={isSubmitting}>
+                Delete Narrative Arc
+              </Button>
+              <Button size="sm" colorScheme="red" variant="solid" onClick={handleBatchDeleteEventDriven} isDisabled={selectedEpisodeIds.size === 0 || isSubmitting} isLoading={isSubmitting}>
+                Delete Event Driven
+              </Button>
+            </HStack>
           </HStack>
-        </HStack>
-        <SimpleGrid columns={[2, 3, 4]} spacing={4}>
-          <Box p={3} border="1px solid" borderColor="gray.100" borderRadius="md">
-            <Text fontSize="xs" color="gray.500">Seasons</Text>
-            <Text fontWeight="bold">{seasonCount}</Text>
+
+          <Box overflowX="auto">
+            <Table variant="simple" size="sm">
+              <Thead>
+                <Tr>
+                  <Th><Checkbox isChecked={selectedEpisodeIds.size > 0 && selectedEpisodeIds.size === flatEpisodes.length} isIndeterminate={selectedEpisodeIds.size > 0 && selectedEpisodeIds.size < flatEpisodes.length} onChange={toggleAll} /></Th>
+                  <Th>Season</Th>
+                  <Th>Episode</Th>
+                  <Th textAlign="center">Video</Th>
+                  <Th textAlign="center">SRT</Th>
+                  <Th textAlign="center">Plot</Th>
+                  <Th textAlign="center">Narrative Arc Extraction</Th>
+                  <Th textAlign="center">Event Driven Analysis</Th>
+                </Tr>
+              </Thead>
+              <Tbody>
+                {flatEpisodes.map((ep) => {
+                  const id = `${ep.season}-${ep.episode}`;
+                  return (
+                    <Tr key={id} _hover={{ bg: 'gray.50' }}>
+                      <Td><Checkbox isChecked={selectedEpisodeIds.has(id)} onChange={() => toggleSelection(id)} /></Td>
+                      <Td>{ep.season}</Td>
+                      <Td>{ep.episode}</Td>
+                      <Td textAlign="center">{renderStatusIcon(ep.has_video_file)}</Td>
+                      <Td textAlign="center">{renderStatusIcon(ep.has_srt_file)}</Td>
+                      <Td textAlign="center">{renderStatusIcon(ep.has_plot_file)}</Td>
+                      <Td textAlign="center">
+                        <Tooltip label={ep.narrative_arc_extraction_status}>
+                          <Box>{renderStatusIcon(ep.narrative_arc_extraction_status)}</Box>
+                        </Tooltip>
+                      </Td>
+                      <Td textAlign="center">
+                        <Tooltip label={ep.event_driven_video_analysis_status}>
+                          <Box>{renderStatusIcon(ep.event_driven_video_analysis_status)}</Box>
+                        </Tooltip>
+                      </Td>
+                    </Tr>
+                  );
+                })}
+              </Tbody>
+            </Table>
           </Box>
-          <Box p={3} border="1px solid" borderColor="gray.100" borderRadius="md">
-            <Text fontSize="xs" color="gray.500">Episodes</Text>
-            <Text fontWeight="bold">{episodeCount}</Text>
-          </Box>
-          <Box p={3} border="1px solid" borderColor="gray.100" borderRadius="md">
-            <Text fontSize="xs" color="gray.500">Completed</Text>
-            <Text fontWeight="bold" color="green.500">{processedCount}</Text>
-          </Box>
-          <Box p={3} border="1px solid" borderColor="gray.100" borderRadius="md">
-            <Text fontSize="xs" color="gray.500">Errors</Text>
-            <Text fontWeight="bold" color="red.500">{errorCount}</Text>
-          </Box>
-        </SimpleGrid>
+        </VStack>
       </Box>
-
-      {/* Analysis Selection */}
-      <Box bg="white" p={6} borderRadius="lg" shadow="sm">
-        <Text fontWeight="bold" mb={4}>Target Selection</Text>
-        <HStack spacing={4}>
-          <Select placeholder="Select season" value={selectedSeason} onChange={(event) => setSelectedSeason(event.target.value)}>
-            {seasons.map((season) => (
-              <option key={season.season} value={season.season}>{season.season}</option>
-            ))}
-          </Select>
-          <Select placeholder="Select episode" value={selectedEpisode} onChange={(event) => setSelectedEpisode(event.target.value)}>
-            {episodesForSeason.map((episode) => (
-              <option key={episode.episode} value={episode.episode}>{episode.episode} - {episode.analysis_status}</option>
-            ))}
-          </Select>
-          <Button colorScheme="blue" variant="outline" onClick={handleAnalyzeSeason} isLoading={isSubmitting} isDisabled={!selectedSeason}>
-            Batch Season
-          </Button>
-        </HStack>
-      </Box>
-
-      {/* Analysis Dashboard */}
-      {selectedEpisode && currentEpisodeData && (
-        <SimpleGrid columns={[1, 1, 2]} spacing={6}>
-          {/* Card 1: Ingestion */}
-          <Box bg="white" p={6} borderRadius="lg" shadow="md" borderTop="4px solid" borderColor="teal.500">
-            <VStack align="stretch" spacing={4}>
-              <HStack justify="space-between">
-                <VStack align="left" spacing={1}>
-                  <Text fontWeight="bold" fontSize="lg">Generate Dialogues and Plot from Video</Text>
-                  {(currentEpisodeData.has_plot_file || currentEpisodeData.has_srt_file) && (
-                    <Badge colorScheme="orange" variant="subtle" fontSize="xs">ALREADY COMPLETED</Badge>
-                  )}
-                </VStack>
-                <Badge colorScheme={currentEpisodeData.has_video_file ? 'green' : 'gray'}>
-                  {currentEpisodeData.has_video_file ? 'Video Present' : 'Video Missing'}
-                </Badge>
-              </HStack>
-              <Text fontSize="sm" color="gray.600">
-                {currentEpisodeData.has_plot_file || currentEpisodeData.has_srt_file 
-                  ? "Notice: Dialogue or Plot already exists. Running this will overwrite them."
-                  : "Automatically transcribe the video and generate an initial plot summary."}
-              </Text>
-              <Button 
-                colorScheme="teal" 
-                onClick={handleGeneratePlotFromVideo} 
-                isLoading={isSubmitting}
-                isDisabled={!currentEpisodeData.has_video_file}
-              >
-                Run Ingestion
-              </Button>
-            </VStack>
-          </Box>
-
-          {/* Card 2: Plot from Dialogues */}
-          <Box bg="white" p={6} borderRadius="lg" shadow="md" borderTop="4px solid" borderColor="orange.500">
-            <VStack align="stretch" spacing={4}>
-              <HStack justify="space-between">
-                <VStack align="left" spacing={1}>
-                  <Text fontWeight="bold" fontSize="lg">Generate Plot from Dialogues</Text>
-                  {currentEpisodeData.has_plot_file && (
-                    <Badge colorScheme="orange" variant="subtle" fontSize="xs">ALREADY COMPLETED</Badge>
-                  )}
-                </VStack>
-                <Badge colorScheme={currentEpisodeData.has_srt_file ? 'green' : 'gray'}>
-                  {currentEpisodeData.has_srt_file ? 'SRT Present' : 'SRT Missing'}
-                </Badge>
-              </HStack>
-              <Text fontSize="sm" color="gray.600">
-                {currentEpisodeData.has_plot_file 
-                  ? "Notice: Plot already exists. Running this will overwrite it."
-                  : "Generate or refine the narrative plot based on existing subtitle dialogues."}
-              </Text>
-              <Button 
-                colorScheme="orange" 
-                onClick={handleGeneratePlotFromSrt} 
-                isLoading={isSubmitting}
-                isDisabled={!currentEpisodeData.has_srt_file}
-              >
-                Run Plot Generation
-              </Button>
-            </VStack>
-          </Box>
-
-          {/* Card 3: Arc Extraction */}
-          <Box bg="white" p={6} borderRadius="lg" shadow="md" borderTop="4px solid" borderColor="blue.500">
-            <VStack align="stretch" spacing={4}>
-              <HStack justify="space-between">
-                <VStack align="left" spacing={1}>
-                  <HStack spacing={2}>
-                    <Text fontWeight="bold" fontSize="lg">Narrative Arc Extraction</Text>
-                    {currentEpisodeData.analysis_status === 'completed' && (
-                      <>
-                        <Badge colorScheme="orange" variant="subtle" fontSize="xs">ALREADY COMPLETED</Badge>
-                        <IconButton
-                          aria-label="Reset narrative arcs"
-                          icon={<DeleteIcon />}
-                          size="xs"
-                          colorScheme="red"
-                          variant="ghost"
-                          onClick={(e) => { e.stopPropagation(); handleResetNarrative(); }}
-                        />
-                      </>
-                    )}
-                  </HStack>
-                </VStack>
-                <Badge colorScheme={currentEpisodeData.has_plot_file ? 'green' : 'gray'}>
-                  {currentEpisodeData.has_plot_file ? 'Plot Ready' : 'Plot Missing'}
-                </Badge>
-              </HStack>
-              <Text fontSize="sm" color="gray.600">
-                {currentEpisodeData.analysis_status === 'completed'
-                  ? "Notice: Narrative arcs have already been extracted. Running this will re-analyze the episode."
-                  : "Extract characters, entities, and narrative arcs using the multi-agent AI framework."}
-              </Text>
-              <Button 
-                colorScheme="blue" 
-                onClick={handleExtractNarrativeArcs} 
-                isLoading={isSubmitting}
-                isDisabled={!currentEpisodeData.has_plot_file}
-              >
-                Run Narrative Analysis
-              </Button>
-            </VStack>
-          </Box>
-
-          {/* Card 4: Scene Splitting */}
-          <Box bg="white" p={6} borderRadius="lg" shadow="md" borderTop="4px solid" borderColor="purple.500">
-            <VStack align="stretch" spacing={4}>
-              <HStack justify="space-between">
-                <VStack align="left" spacing={1}>
-                  <HStack spacing={2}>
-                    <Text fontWeight="bold" fontSize="lg">Semantic Video Scene Splitting</Text>
-                    {currentEpisodeData.has_clips && (
-                      <>
-                        <Badge colorScheme="orange" variant="subtle" fontSize="xs">ALREADY COMPLETED</Badge>
-                        <IconButton
-                          aria-label="Reset video clips"
-                          icon={<DeleteIcon />}
-                          size="xs"
-                          colorScheme="red"
-                          variant="ghost"
-                          onClick={(e) => { e.stopPropagation(); handleResetVideo(); }}
-                        />
-                      </>
-                    )}
-                  </HStack>
-                </VStack>
-                <Badge colorScheme={currentEpisodeData.has_video_file && currentEpisodeData.has_plot_file && currentEpisodeData.has_srt_file ? 'green' : 'gray'}>
-                  {currentEpisodeData.has_video_file && currentEpisodeData.has_plot_file && currentEpisodeData.has_srt_file ? 'Ready' : 'Missing Assets'}
-                </Badge>
-              </HStack>
-              <Text fontSize="sm" color="gray.600">
-                {currentEpisodeData.has_clips 
-                  ? "Notice: Clips already exist. Running this will empty the clips folder and re-extract them."
-                  : "Subdivide the episode into individual video clips based on semantic plot segments."}
-              </Text>
-              <Button 
-                colorScheme="purple" 
-                onClick={handleSemanticSceneSplitting} 
-                isLoading={isSubmitting}
-                isDisabled={!currentEpisodeData.has_video_file || !currentEpisodeData.has_plot_file || !currentEpisodeData.has_srt_file}
-              >
-                Run Scene Splitting
-              </Button>
-            </VStack>
-          </Box>
-
-          {/* Card 5: Event-Driven Video Analysis */}
-          <Box bg="white" p={6} borderRadius="lg" shadow="md" borderTop="4px solid" borderColor="cyan.500">
-            <VStack align="stretch" spacing={4}>
-              <HStack justify="space-between">
-                <VStack align="left" spacing={1}>
-                  <HStack spacing={2}>
-                    <Text fontWeight="bold" fontSize="lg">Event-Driven Video Analysis</Text>
-                    {currentEpisodeData.has_event_analysis && (
-                      <>
-                        <Badge colorScheme="orange" variant="subtle" fontSize="xs">ALREADY COMPLETED</Badge>
-                        <IconButton
-                          aria-label="Reset event analysis"
-                          icon={<DeleteIcon />}
-                          size="xs"
-                          colorScheme="red"
-                          variant="ghost"
-                          onClick={(e) => { e.stopPropagation(); handleResetEventAnalysis(); }}
-                        />
-                      </>
-                    )}
-                  </HStack>
-                  <Badge colorScheme="cyan" variant="subtle" fontSize="xs">BEAT-LEVEL EXTRACTION</Badge>
-                </VStack>
-                <Badge colorScheme={currentEpisodeData.has_srt_file && (currentEpisodeData.analysis_status === 'completed' || currentEpisodeData.has_plot_file) ? 'green' : 'gray'}>
-                  {currentEpisodeData.has_srt_file && (currentEpisodeData.analysis_status === 'completed' || currentEpisodeData.has_plot_file) ? 'Ready' : 'Missing Assets'}
-                </Badge>
-              </HStack>
-              <Text fontSize="sm" color="gray.600">
-                Extract 20-30 beat-level events per episode with character detection, event typing, and video clip extraction.
-              </Text>
-              <Button
-                colorScheme="cyan"
-                onClick={async () => {
-                  setIsSubmitting(true);
-                  
-                  // 1. Run Narrative Arc Extraction if not already completed
-                  if (currentEpisodeData.analysis_status !== 'completed') {
-                    toast({ title: 'Pre-requisite: Starting Narrative Arc Extraction...', status: 'info', duration: 3000 });
-                    const arcResponse = await api.request(
-                      `/library/explorer/${selectedSeriesCode}/${selectedSeason}/${selectedEpisode}/narrative-arc-extraction`,
-                      { method: 'POST' }
-                    );
-                    
-                    if (!isApiSuccess(arcResponse)) {
-                      const errorMsg = isApiError(arcResponse) ? arcResponse.error : 'Arc extraction failed';
-                      toast({ title: 'Unable to extract arcs (pre-requisite failed)', description: errorMsg, status: 'error' });
-                      setIsSubmitting(false);
-                      return;
-                    }
-                    toast({ title: 'Narrative Arc Extraction completed successfully!', status: 'success', duration: 2000 });
-                  }
-                  
-                  // 2. Now run the Event-Driven Video Analysis
-                  toast({ title: 'Starting Event-Driven Video Analysis...', status: 'info', duration: 2000 });
-                  const result = await api.analyzeEpisodeEventDriven(selectedSeriesCode, selectedSeason, selectedEpisode);
-                  setIsSubmitting(false);
-                  
-                  if (isApiSuccess(result)) {
-                    toast({ title: `Analysis complete`, description: `${result.data.events_extracted} events extracted`, status: 'success' });
-                    await onRefresh?.();
-                  } else {
-                    toast({ title: 'Analysis failed', description: result.error, status: 'error' });
-                  }
-                }}
-                isLoading={isSubmitting}
-                isDisabled={!currentEpisodeData.has_srt_file || (currentEpisodeData.analysis_status !== 'completed' && !currentEpisodeData.has_plot_file)}
-              >
-                Run Event Analysis
-              </Button>
-              <Text fontSize="xs" color="gray.500" fontStyle="italic">
-                *Note: Narrative Arc Extraction will automatically run first if not already completed.
-              </Text>
-            </VStack>
-          </Box>
-        </SimpleGrid>
-      )}
     </VStack>
   );
 };

@@ -42,11 +42,9 @@ class EpisodeResetService:
         """Reset an episode's analysis artifacts. Safe to call regardless of current state."""
         # This now resets EVERYTHING by combining granular resets
         narrative_results = self.reset_narrative_arc_extraction(series, season, episode)
-        video_results = self.reset_semantic_video_splitting(series, season, episode)
 
         return {
-            "narrative_reset": narrative_results,
-            "video_reset": video_results
+            "narrative_reset": narrative_results
         }
 
     def reset_narrative_arc_extraction(self, series: str, season: str, episode: str) -> Dict[str, object]:
@@ -73,7 +71,7 @@ class EpisodeResetService:
         self._cleanup_character_presence(series, season, episode)
 
         # 5. Reset status in DB
-        self._set_episode_metadata_status(series, season, episode, analysis_status="not_processed")
+        self._set_episode_metadata_status(series, season, episode, narrative_arc_extraction_status="not_processed")
 
         return {
             "removed_progression_ids": db_results["removed_progression_ids"],
@@ -82,24 +80,15 @@ class EpisodeResetService:
             "deleted_vector_entries": vector_entries_deleted,
         }
 
-    def reset_semantic_video_splitting(self, series: str, season: str, episode: str) -> Dict[str, object]:
-        """Reset ONLY semantic video splitting: delete scenes folder and reset status."""
-        logger.info(f"Resetting semantic video splitting for {series} {season} {episode}")
-        
-        # 1. Delete scenes folder
-        self._delete_scenes_folder(series, season, episode)
 
-        # 2. Reset status in DB
-        self._set_episode_metadata_status(series, season, episode, clips_completed=False)
-
-        return {"status": "success"}
 
     def _set_episode_metadata_status(
         self, 
         series: str, 
         season: str, 
         episode: str, 
-        analysis_status: str = None, 
+        narrative_arc_extraction_status: str = None, 
+        event_driven_video_analysis_status: str = None,
         clips_completed: bool = None
     ) -> None:
         """Update episode metadata status fields."""
@@ -115,8 +104,10 @@ class EpisodeResetService:
                 )
                 db_episode = session.exec(stmt).first()
                 if db_episode:
-                    if analysis_status is not None:
-                        db_episode.analysis_status = analysis_status
+                    if narrative_arc_extraction_status is not None:
+                        db_episode.narrative_arc_extraction_status = narrative_arc_extraction_status
+                    if event_driven_video_analysis_status is not None:
+                        db_episode.event_driven_video_analysis_status = event_driven_video_analysis_status
                     if clips_completed is not None:
                         db_episode.clips_completed = clips_completed
                     session.add(db_episode)
@@ -299,17 +290,7 @@ class EpisodeResetService:
         except Exception as e:
             logger.error(f"Error cleaning up character presences in DB: {e}")
 
-    def _delete_scenes_folder(self, series: str, season: str, episode: str) -> None:
-        """Delete the 'scenes' folder for the episode."""
-        path_handler = PathHandler(series, season, episode, base_dir=self.base_dir)
-        scenes_dir = Path(path_handler.get_episode_scenes_dir())
-        if scenes_dir.exists() and scenes_dir.is_dir():
-            try:
-                import shutil
-                shutil.rmtree(scenes_dir)
-                logger.info(f"Deleted scenes folder: {scenes_dir}")
-            except Exception as e:
-                logger.warning(f"Failed to delete scenes folder {scenes_dir}: {e}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Reset an episode's analysis artifacts")

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   Box,
   VStack,
@@ -26,6 +26,60 @@ interface EventDrivenAnalysisDashboardProps {
 
 const api = ApiClient.getInstance();
 
+interface VideoClipPlayerProps {
+  clipPath?: string;
+  event: NarrativeEvent;
+  series: string;
+}
+
+const VideoClipPlayer: React.FC<VideoClipPlayerProps> = ({ clipPath, event, series }) => {
+  const clipParts = useMemo(() => {
+    if (!clipPath) return null;
+    const sep = clipPath.includes('/') ? '/' : '\\';
+    const parts = clipPath.split(sep);
+    const clipsIdx = parts.indexOf('clips');
+    if (clipsIdx !== -1 && clipsIdx >= 3) {
+      return {
+        season: parts[clipsIdx - 2],
+        episode: parts[clipsIdx - 1],
+        filename: parts[clipsIdx + 1],
+      };
+    }
+    const epMatch = event.episode_ref.match(/^(S\d+)(E\d+)$/);
+    if (epMatch) {
+      return {
+        season: epMatch[1],
+        episode: epMatch[2],
+        filename: clipPath.split(sep).pop() || '',
+      };
+    }
+    return null;
+  }, [clipPath, event.episode_ref]);
+
+  const clipUrl = clipParts
+    ? `/api/events/${series}/clips/${clipParts.season}/${clipParts.episode}/clips/${clipParts.filename}`
+    : null;
+
+  if (!clipUrl) {
+    return (
+      <Box p={4} bg="gray.100" borderRadius="md" textAlign="center">
+        <Text fontSize="sm" color="gray.500">Video clip not available</Text>
+      </Box>
+    );
+  }
+
+  return (
+    <Box borderRadius="md" overflow="hidden" border="1px solid" borderColor="gray.200" bg="black" mt={2}>
+      <video
+        src={clipUrl}
+        controls
+        autoPlay
+        style={{ width: '100%', maxHeight: '360px', display: 'block', margin: '0 auto' }}
+      />
+    </Box>
+  );
+};
+
 export const EventDrivenAnalysisDashboard: React.FC<EventDrivenAnalysisDashboardProps> = ({ series }) => {
   const toast = useToast();
   const [snapshot, setSnapshot] = useState<EventDrivenAnalysisSnapshot | null>(null);
@@ -48,6 +102,7 @@ export const EventDrivenAnalysisDashboard: React.FC<EventDrivenAnalysisDashboard
         duration: 3000,
       });
     } finally {
+      setSnapshot(prev => prev); // trigger rerender if needed
       setLoading(false);
     }
   }, [series, toast]);
@@ -155,6 +210,16 @@ export const EventDrivenAnalysisDashboard: React.FC<EventDrivenAnalysisDashboard
                   <Text fontSize="sm" fontWeight="bold" mb={1}>Event Type</Text>
                   <Badge>{selectedEvent.event_type}</Badge>
                 </Box>
+                {selectedEvent.clip_path && (
+                  <Box>
+                    <Text fontSize="sm" fontWeight="bold" mb={1}>Video Clip</Text>
+                    <VideoClipPlayer
+                      clipPath={selectedEvent.clip_path}
+                      event={selectedEvent}
+                      series={series}
+                    />
+                  </Box>
+                )}
               </VStack>
             )}
           </ModalBody>

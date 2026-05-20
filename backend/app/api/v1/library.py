@@ -40,6 +40,10 @@ class UploadAssignmentRequest(BaseModel):
     episode: str
 
 
+class PlotUpdateRequest(BaseModel):
+    content: str
+
+
 # Legacy/simple endpoints
 @router.get("/series")
 async def get_series():
@@ -179,7 +183,7 @@ async def create_episodes(series: str, season: str, request: EpisodeBatchCreateR
                     ep = EpisodeMetadata(
                         season_id=season_meta.id, 
                         episode_code=ep_code,
-                        analysis_status="missing_files"
+                        narrative_arc_extraction_status="missing_files"
                     )
                     session.add(ep)
                     created += 1
@@ -307,13 +311,62 @@ async def upload_episode_file(series: str, season: str, episode: str, file: Uplo
                 
                 current_status = status_builder.build(normalized_series, normalized_season, normalized_episode, 0)
                 
-                # If plot is now present and status wasn't already completed, set to "pending"
-                if ep_meta.analysis_status != "completed":
-                    if current_status["has_plot_file"]:
-                        ep_meta.analysis_status = "pending"
-                    elif current_status["has_srt_file"]:
-                        # If only SRT is present and auto-gen failed or something, it's still missing the plot
-                        ep_meta.analysis_status = "missing_files"
+                # Check database progressions
+                from app.models.narrative import ArcProgression
+                progressions = session.exec(
+                    select(ArcProgression).where(
+                        ArcProgression.series == normalized_series,
+                        ArcProgression.season == normalized_season,
+                        ArcProgression.episode == normalized_episode
+                    )
+                ).all()
+                has_db_progressions = len(progressions) > 0
+                
+                # Check vector store
+                has_vector_docs = False
+                try:
+                    from app.services.ai.vector import VectorStoreService
+                    vector_svc = VectorStoreService()
+                    chroma_results = vector_svc.collection.get(
+                        where={"$and": [
+                            {"series": normalized_series},
+                            {"season": normalized_season},
+                            {"episode": normalized_episode}
+                        ]}
+                    )
+                    has_vector_docs = len(chroma_results.get("ids", [])) > 0
+                except Exception as e:
+                    logger.warning(f"Error checking vector store in upload: {e}")
+                
+                # Check event snapshot
+                has_event_analysis = False
+                event_snapshot_file = Path(DATA_DIR) / normalized_series / "event_driven_analysis_snapshot.json"
+                if event_snapshot_file.exists():
+                    try:
+                        import json
+                        data = json.loads(event_snapshot_file.read_text(encoding="utf-8"))
+                        for event_data in data.get("events", []):
+                            if event_data.get("episode_ref") == f"{normalized_season}{normalized_episode}":
+                                has_event_analysis = True
+                                break
+                    except Exception:
+                        pass
+                
+                # Set narrative status
+                if has_db_progressions or has_vector_docs:
+                    ep_meta.narrative_arc_extraction_status = "completed"
+                else:
+                    if current_status["has_plot_file"] or current_status["has_srt_file"]:
+                        ep_meta.narrative_arc_extraction_status = "pending"
+                    else:
+                        ep_meta.narrative_arc_extraction_status = "missing_files"
+                
+                # Set event status
+                if has_event_analysis:
+                    ep_meta.event_driven_video_analysis_status = "completed"
+                else:
+                    if ep_meta.event_driven_video_analysis_status is None:
+                        ep_meta.event_driven_video_analysis_status = "not_processed"
                 
                 session.add(ep_meta)
                 session.commit()
@@ -338,6 +391,79 @@ async def get_episode_plot(series: str, season: str, episode: str):
         raise
     except Exception as e:
         logger.error(f"Error getting plot content: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/series/{series}/{season}/{episode}/plot")
+async def save_episode_plot(series: str, season: str, episode: str, request: PlotUpdateRequest):
+    """Save/update the plot content for an episode and update its database status."""
+    try:
+        from app.services.library.ingestion import SeriesIngestionService
+        svc = SeriesIngestionService(base_dir=DATA_DIR)
+        
+        # Save the content to the plot file
+        result = svc.save_plot_file(series, season, episode, request.content)
+        
+        # Update database status
+        with db_manager.session_scope() as session:
+            from sqlmodel import select
+            from app.models.narrative import SeasonMetadata
+            
+            # Find the episode
+            ep_meta = session.exec(
+                select(EpisodeMetadata)
+                .join(SeasonMetadata)
+                .where(
+                    SeasonMetadata.series_code == series.upper(),
+                    SeasonMetadata.season_code == svc._normalize_season(season),
+                    EpisodeMetadata.episode_code == svc._normalize_episode(episode)
+                )
+            ).first()
+            
+            if ep_meta:
+                normalized_series = svc._normalize_series_code(series)
+                normalized_season = svc._normalize_season(season)
+                normalized_episode = svc._normalize_episode(episode)
+                
+                # Check database progressions
+                from app.models.narrative import ArcProgression
+                progressions = session.exec(
+                    select(ArcProgression).where(
+                        ArcProgression.series == normalized_series,
+                        ArcProgression.season == normalized_season,
+                        ArcProgression.episode == normalized_episode
+                    )
+                ).all()
+                has_db_progressions = len(progressions) > 0
+                
+                # Check vector store
+                has_vector_docs = False
+                try:
+                    from app.services.ai.vector import VectorStoreService
+                    vector_svc = VectorStoreService()
+                    chroma_results = vector_svc.collection.get(
+                        where={"$and": [
+                            {"series": normalized_series},
+                            {"season": normalized_season},
+                            {"episode": normalized_episode}
+                        ]}
+                    )
+                    has_vector_docs = len(chroma_results.get("ids", [])) > 0
+                except Exception as e:
+                    logger.warning(f"Error checking vector store in plot update: {e}")
+                
+                # Set narrative status
+                if has_db_progressions or has_vector_docs:
+                    ep_meta.narrative_arc_extraction_status = "completed"
+                else:
+                    ep_meta.narrative_arc_extraction_status = "pending"
+                
+                session.add(ep_meta)
+                session.commit()
+                
+        return result
+    except Exception as e:
+        logger.error(f"Error saving plot content: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -402,10 +528,62 @@ async def delete_episode_file(series: str, season: str, episode: str, file_type:
                 
                 current_status = status_builder.build(normalized_series, normalized_season, normalized_episode, 0)
                 
-                if not current_status["has_plot_file"]:
-                    ep_meta.analysis_status = "missing_files"
-                elif ep_meta.analysis_status != "completed":
-                    ep_meta.analysis_status = "pending"
+                # Check database progressions
+                from app.models.narrative import ArcProgression
+                progressions = session.exec(
+                    select(ArcProgression).where(
+                        ArcProgression.series == normalized_series,
+                        ArcProgression.season == normalized_season,
+                        ArcProgression.episode == normalized_episode
+                    )
+                ).all()
+                has_db_progressions = len(progressions) > 0
+                
+                # Check vector store
+                has_vector_docs = False
+                try:
+                    from app.services.ai.vector import VectorStoreService
+                    vector_svc = VectorStoreService()
+                    chroma_results = vector_svc.collection.get(
+                        where={"$and": [
+                            {"series": normalized_series},
+                            {"season": normalized_season},
+                            {"episode": normalized_episode}
+                        ]}
+                    )
+                    has_vector_docs = len(chroma_results.get("ids", [])) > 0
+                except Exception as e:
+                    logger.warning(f"Error checking vector store in delete: {e}")
+                
+                # Check event snapshot
+                has_event_analysis = False
+                event_snapshot_file = Path(DATA_DIR) / normalized_series / "event_driven_analysis_snapshot.json"
+                if event_snapshot_file.exists():
+                    try:
+                        import json
+                        data = json.loads(event_snapshot_file.read_text(encoding="utf-8"))
+                        for event_data in data.get("events", []):
+                            if event_data.get("episode_ref") == f"{normalized_season}{normalized_episode}":
+                                has_event_analysis = True
+                                break
+                    except Exception:
+                        pass
+                
+                # Set narrative status
+                if has_db_progressions or has_vector_docs:
+                    ep_meta.narrative_arc_extraction_status = "completed"
+                else:
+                    if not current_status["has_plot_file"] and not current_status["has_srt_file"]:
+                        ep_meta.narrative_arc_extraction_status = "missing_files"
+                    else:
+                        ep_meta.narrative_arc_extraction_status = "pending"
+                
+                # Set event status
+                if has_event_analysis:
+                    ep_meta.event_driven_video_analysis_status = "completed"
+                else:
+                    if ep_meta.event_driven_video_analysis_status is None:
+                        ep_meta.event_driven_video_analysis_status = "not_processed"
                     
                 session.add(ep_meta)
                 session.commit()
@@ -484,21 +662,7 @@ async def analyze_series(series: str, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/series/{series}/{season}/{episode}/analyze-video")
-async def analyze_video_scenes(series: str, season: str, episode: str):
-    """Trigger video scene analysis for an episode."""
-    try:
-        from app.services.analysis.pipeline import NarrativeArcExtractionPipelineService
-        pipeline = NarrativeArcExtractionPipelineService()
-        result = await pipeline.analyze_video_scenes(series, season, episode)
-        if result.get("status") == "error":
-            raise HTTPException(status_code=400, detail=result.get("message"))
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error starting video scene analysis: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @router.post("/series/{series}/{season}/{episode}/transcribe-video")
@@ -541,7 +705,7 @@ async def full_video_to_plot(series: str, season: str, episode: str):
     try:
         from app.services.analysis.pipeline import NarrativeArcExtractionPipelineService
         pipeline = NarrativeArcExtractionPipelineService()
-        result = await pipeline.full_video_to_plot(series, season, episode)
+        result = await pipeline.generate_dialogues_and_plot_from_video(series, season, episode)
         if result.get("status") == "error":
             raise HTTPException(status_code=400, detail=result.get("message"))
         return result
@@ -644,16 +808,7 @@ async def reset_narrative(series: str, season: str, episode: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/explorer/{series}/{season}/{episode}/reset-video")
-async def reset_video(series: str, season: str, episode: str):
-    """Reset only video splitting state."""
-    try:
-        reset_svc = EpisodeResetService()
-        result = reset_svc.reset_semantic_video_splitting(series, season, episode)
-        return result
-    except Exception as e:
-        logger.error(f"Error resetting video: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 @router.post("/explorer/{series}/{season}/reset")

@@ -17,6 +17,7 @@ class LibraryEpisodeStatusBuilder:
         episode_code: str,
         progression_count: int,
         db_status: Optional[str] = None,
+        db_event_status: Optional[str] = None,
         db_clips_completed: bool = False,
     ) -> Dict[str, Any]:
         episode_dir = Path(self.base_dir) / series_code / season_code / episode_code
@@ -26,12 +27,10 @@ class LibraryEpisodeStatusBuilder:
         full_dialogues_path = Path(path_handler.get_full_dialogues_file_path())
         srt_path = self.find_srt_path(episode_dir)
         video_file = self.video_service.find_video_for_episode(series_code, season_code, episode_code)
-        has_analysis_artifacts = Path(path_handler.get_semantic_segments_path()).exists() or Path(path_handler.get_suggested_episode_arc_path()).exists()
+        has_analysis_artifacts = Path(path_handler.get_suggested_episode_arc_path()).exists()
         
         # Check for clips
-        scenes_dir = Path(path_handler.get_episode_scenes_dir())
-        metadata_path = scenes_dir / "scenes_metadata.json"
-        has_clips = db_clips_completed or metadata_path.exists()
+        has_clips = db_clips_completed
 
         # Check for event analysis
         has_event_analysis = False
@@ -49,16 +48,23 @@ class LibraryEpisodeStatusBuilder:
 
         # Use DB status as authoritative if set, otherwise compute from files
         if db_status in ('completed', 'error', 'pending', 'not_processed', 'missing_files'):
-            analysis_status = db_status
+            narrative_arc_extraction_status = db_status
         elif progression_count > 0 and plot_path.exists():
-            analysis_status = "completed"
+            narrative_arc_extraction_status = "completed"
         elif progression_count > 0 and not plot_path.exists():
-            analysis_status = "error"
+            narrative_arc_extraction_status = "error"
         elif plot_path.exists() or srt_path is not None:
-            analysis_status = "pending"
+            narrative_arc_extraction_status = "pending"
         else:
-            analysis_status = "missing_files"
+            narrative_arc_extraction_status = "missing_files"
 
+        if db_event_status in ('completed', 'error', 'not_processed', 'missing_files'):
+            event_driven_video_analysis_status = db_event_status
+        elif has_event_analysis:
+            event_driven_video_analysis_status = "completed"
+        else:
+            event_driven_video_analysis_status = "not_processed"
+        
         return {
             "series": series_code,
             "season": season_code,
@@ -72,7 +78,8 @@ class LibraryEpisodeStatusBuilder:
             "has_clips": has_clips,
             "has_event_analysis": has_event_analysis,
             "progression_count": progression_count,
-            "analysis_status": analysis_status,
+            "narrative_arc_extraction_status": narrative_arc_extraction_status,
+            "event_driven_video_analysis_status": event_driven_video_analysis_status,
         }
 
     def find_srt_path(self, episode_dir: Path) -> Path | None:

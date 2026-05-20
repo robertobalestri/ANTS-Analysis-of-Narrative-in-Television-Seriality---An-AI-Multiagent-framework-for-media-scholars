@@ -49,6 +49,8 @@ export const LibraryExplorer: React.FC<LibraryExplorerProps> = ({
   const [newSeasonBySeries, setNewSeasonBySeries] = useState<Record<string, string>>({});
   const [newEpisodeBySeason, setNewEpisodeBySeason] = useState<Record<string, string>>({});
   const [plotContent, setPlotContent] = useState<string>('');
+  const [originalPlotContent, setOriginalPlotContent] = useState<string>('');
+  const [loadedEpisodeKey, setLoadedEpisodeKey] = useState<string>('');
   const [isFetchingPlot, setIsFetchingPlot] = useState(false);
   const [isVideoPlayerOpen, setIsVideoPlayerOpen] = useState(false);
 
@@ -92,19 +94,28 @@ export const LibraryExplorer: React.FC<LibraryExplorerProps> = ({
   useEffect(() => {
     if (!selectedSeriesData || !selectedEpisode) {
       setPlotContent('');
+      setOriginalPlotContent('');
+      setLoadedEpisodeKey('');
       return;
     }
 
     if (selectedEpisode.series !== selectedSeries) {
       setSelectedEpisode(null);
       setPlotContent('');
+      setOriginalPlotContent('');
+      setLoadedEpisodeKey('');
       return;
     }
 
-    if (selectedEpisode.has_plot_file) {
-      void fetchPlotContent(selectedEpisode.series, selectedEpisode.season, selectedEpisode.episode);
-    } else {
-      setPlotContent('');
+    const currentEpisodeKey = `${selectedEpisode.series}-${selectedEpisode.season}-${selectedEpisode.episode}-${selectedEpisode.has_plot_file}`;
+    if (currentEpisodeKey !== loadedEpisodeKey) {
+      setLoadedEpisodeKey(currentEpisodeKey);
+      if (selectedEpisode.has_plot_file) {
+        void fetchPlotContent(selectedEpisode.series, selectedEpisode.season, selectedEpisode.episode);
+      } else {
+        setPlotContent('');
+        setOriginalPlotContent('');
+      }
     }
   }, [
     selectedEpisode?.series,
@@ -112,16 +123,19 @@ export const LibraryExplorer: React.FC<LibraryExplorerProps> = ({
     selectedEpisode?.episode,
     selectedEpisode?.has_plot_file,
     selectedSeries,
-    selectedSeriesData
+    selectedSeriesData,
+    loadedEpisodeKey
   ]);
 
   const fetchPlotContent = async (seriesCode: string, seasonCode: string, episodeCode: string) => {
     setPlotContent(''); // Clear previous content
+    setOriginalPlotContent('');
     setIsFetchingPlot(true);
     try {
       const response = await api.getEpisodePlot(seriesCode, seasonCode, episodeCode);
       if (isApiSuccess(response)) {
         setPlotContent(response.data.content);
+        setOriginalPlotContent(response.data.content);
       } else {
         toast({
           title: 'Unable to load plot text',
@@ -287,24 +301,7 @@ export const LibraryExplorer: React.FC<LibraryExplorerProps> = ({
     void fetchPlotContent(response.data.series, response.data.season, response.data.episode);
   };
 
-  const handleAnalyzeVideo = async () => {
-    if (!selectedEpisode) return;
-    
-    setIsSubmitting(true);
-    const response = await api.analyzeVideoScenes(selectedEpisode.series, selectedEpisode.season, selectedEpisode.episode);
-    setIsSubmitting(false);
 
-    if (isApiSuccess(response)) {
-      toast({ 
-        title: 'Video analysis complete', 
-        description: response.data.message,
-        status: 'success' 
-      });
-      await refreshExplorer();
-    } else {
-      toast({ title: 'Video analysis failed', description: response.error, status: 'error' });
-    }
-  };
 
   const handleTranscribeVideo = async () => {
     if (!selectedEpisode) return;
@@ -323,6 +320,42 @@ export const LibraryExplorer: React.FC<LibraryExplorerProps> = ({
     } else {
       toast({ title: 'Transcription failed', description: response.error, status: 'error' });
     }
+  };
+
+
+  const handleSavePlot = async () => {
+    if (!selectedEpisode) return;
+    
+    setIsSubmitting(true);
+    const response = await api.saveEpisodePlot(
+      selectedEpisode.series,
+      selectedEpisode.season,
+      selectedEpisode.episode,
+      plotContent
+    );
+    setIsSubmitting(false);
+
+    if (isApiSuccess(response)) {
+      toast({ title: 'Plot saved successfully', status: 'success' });
+      setOriginalPlotContent(plotContent);
+      
+      // Refresh the status
+      const allSeries = await refreshExplorer();
+      if (allSeries) {
+        const updatedSeries = allSeries.find(s => s.code === selectedEpisode.series);
+        const updatedSeason = updatedSeries?.seasons?.find(s => s.season === selectedEpisode.season);
+        const updatedEpisode = updatedSeason?.episodes.find(e => e.episode === selectedEpisode.episode);
+        if (updatedEpisode) {
+          setSelectedEpisode(updatedEpisode);
+        }
+      }
+    } else {
+      toast({ title: 'Unable to save plot', description: response.error, status: 'error' });
+    }
+  };
+
+  const handleCancelPlotEdit = () => {
+    setPlotContent(originalPlotContent);
   };
 
 
@@ -373,7 +406,7 @@ export const LibraryExplorer: React.FC<LibraryExplorerProps> = ({
     }
   };
 
-  const statusColor = (status: ExplorerEpisodeStatus['analysis_status']) => {
+  const statusColor = (status: ExplorerEpisodeStatus['narrative_arc_extraction_status']) => {
     if (status === 'completed') return 'green';
     if (status === 'error') return 'red';
     if (status === 'pending') return 'blue';
@@ -381,7 +414,7 @@ export const LibraryExplorer: React.FC<LibraryExplorerProps> = ({
     return 'gray';
   };
 
-  const statusLabel = (status: ExplorerEpisodeStatus['analysis_status']) => {
+  const statusLabel = (status: ExplorerEpisodeStatus['narrative_arc_extraction_status']) => {
     if (status === 'completed') return 'Analyzed';
     if (status === 'error') return 'Error';
     if (status === 'pending') return 'Ready';
@@ -432,7 +465,7 @@ export const LibraryExplorer: React.FC<LibraryExplorerProps> = ({
                             key={episodeItem.episode}
                             size="sm"
                             variant={selectedEpisode && (selectedEpisode as any).episode === episodeItem.episode ? 'solid' : 'outline'}
-                            colorScheme={statusColor(episodeItem.analysis_status)}
+                            colorScheme={statusColor(episodeItem.narrative_arc_extraction_status)}
                             onClick={() => setSelectedEpisode(episodeItem)}
                             _hover={{ transform: 'translateY(-2px)', shadow: 'md' }}
                             transition="all 0.2s"
@@ -489,7 +522,7 @@ export const LibraryExplorer: React.FC<LibraryExplorerProps> = ({
                   </HStack>
                   <Text color="gray.600" ml={10}>Episode processing status from filesystem and database.</Text>
                 </Box>
-                <Badge colorScheme={statusColor(selectedEpisode.analysis_status)}>{statusLabel(selectedEpisode.analysis_status)}</Badge>
+                <Badge colorScheme={statusColor(selectedEpisode.narrative_arc_extraction_status)}>{statusLabel(selectedEpisode.narrative_arc_extraction_status)}</Badge>
               </HStack>
 
               <Divider />
@@ -646,7 +679,29 @@ export const LibraryExplorer: React.FC<LibraryExplorerProps> = ({
 
               {selectedEpisode.has_plot_file && (
                 <Box p={4} borderWidth="1px" borderRadius="md" bg="blue.50">
-                  <Text fontWeight="bold" mb={2} color="blue.700">Detailed Plot Preview</Text>
+                  <HStack justify="space-between" mb={2}>
+                    <Text fontWeight="bold" color="blue.700">Detailed Plot Preview</Text>
+                    {plotContent !== originalPlotContent && (
+                      <HStack spacing={2}>
+                        <Button
+                          size="xs"
+                          colorScheme="green"
+                          onClick={handleSavePlot}
+                          isLoading={isSubmitting}
+                        >
+                          Save Changes
+                        </Button>
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          onClick={handleCancelPlotEdit}
+                          isDisabled={isSubmitting}
+                        >
+                          Cancel
+                        </Button>
+                      </HStack>
+                    )}
+                  </HStack>
                   {isFetchingPlot ? (
                     <HStack py={4} justify="center">
                       <Spinner size="sm" />
@@ -655,7 +710,7 @@ export const LibraryExplorer: React.FC<LibraryExplorerProps> = ({
                   ) : (
                     <Textarea
                       value={plotContent}
-                      readOnly
+                      onChange={(e) => setPlotContent(e.target.value)}
                       rows={8}
                       bg="white"
                       fontSize="sm"
@@ -691,14 +746,7 @@ export const LibraryExplorer: React.FC<LibraryExplorerProps> = ({
                       Watch Episode
                     </Button>
                   )}
-                  <Button
-                    colorScheme="purple"
-                    onClick={handleAnalyzeVideo}
-                    isLoading={isSubmitting}
-                    isDisabled={!selectedEpisode.has_plot_file || !selectedEpisode.has_srt_file || !selectedEpisode.has_video_file}
-                  >
-                    Analyze Video Scenes
-                  </Button>
+
                   <Button
                     colorScheme="teal"
                     onClick={handleTranscribeVideo}

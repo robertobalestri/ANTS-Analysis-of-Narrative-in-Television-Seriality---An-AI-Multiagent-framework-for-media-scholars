@@ -88,23 +88,6 @@ class NarrativeArcExtractionPipelineService:
             logger.error(f"Series analysis error for {series}: {e}")
             return {"status": "error", "message": str(e)}
 
-    async def analyze_video_scenes(
-        self,
-        series: str,
-        season: str,
-        episode: str,
-        base_dir: str = DATA_DIR,
-    ) -> Dict[str, Any]:
-        """Run the video scene extraction pipeline."""
-        logger.info(f"Pipeline: analyzing video scenes for {series}/{season}/{episode}")
-        try:
-            from app.services.pipeline.video_pipeline import process_video_scenes
-            
-            result = await process_video_scenes(series, season, episode, base_dir=base_dir)
-            return result
-        except Exception as e:
-            logger.error(f"Video pipeline error for {series}/{season}/{episode}: {e}")
-            return {"status": "error", "message": str(e)}
 
     async def transcribe_episode_video(
         self,

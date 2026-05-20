@@ -93,18 +93,6 @@ def extract_event_clips(
             start_time = event.srt_start_time
             end_time = event.srt_end_time
 
-        # Guarantee start_time <= end_time by swapping if reversed
-        try:
-            sec_start = srt_time_to_seconds(start_time)
-            sec_end = srt_time_to_seconds(end_time)
-            if sec_start > sec_end:
-                logger.warning(f"Reversed timestamps detected for event {event.id}: {start_time} --> {end_time}. Swapping.")
-                start_time, end_time = end_time, start_time
-                event_copy.video_start = sec_end
-                event_copy.video_end = sec_start
-        except Exception as e:
-            logger.error(f"Error parsing timestamps for event {event.id}: {e}")
-
         # Generate clip filename
         clip_filename = f"{event.id}.mp4"
         clip_path = output_path / clip_filename

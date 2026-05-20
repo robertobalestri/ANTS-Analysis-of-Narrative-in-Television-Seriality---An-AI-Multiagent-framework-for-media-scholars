@@ -241,7 +241,8 @@ class EpisodeMetadata(Base, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     season_id: int = Field(foreign_key="season_metadata.id", index=True)
     episode_code: str = Field(index=True)
-    analysis_status: Optional[str] = Field(default="missing_files", index=True)
+    narrative_arc_extraction_status: Optional[str] = Field(default="missing_files", index=True)
+    event_driven_video_analysis_status: Optional[str] = Field(default="not_processed", index=True)
     clips_completed: bool = Field(default=False)
 
     __table_args__ = (

@@ -30,8 +30,7 @@ class PathHandler:
     def get_entity_normalized_plot_file_path(self) -> str:
         return os.path.join(self.base_dir, self.series, self.season, self.episode, f"{self.series}{self.season}{self.episode}_plot_entities_normalized.txt")
 
-    def get_semantic_segments_path(self) -> str:
-        return os.path.join(self.base_dir, self.series, self.season, self.episode, f"{self.series}{self.season}{self.episode}_plot_semantic_segments.json")
+
 
     def get_episode_narrative_arcs_path(self) -> str:
         return os.path.join(self.base_dir, self.series, self.season, self.episode, f"{self.series}{self.season}{self.episode}_multiagent_episode_narrative_arcs.json")
@@ -68,13 +67,7 @@ class PathHandler:
         """Standardized SRT filename: SERIES_SxxExx.srt"""
         return os.path.join(self.base_dir, self.series, self.season, self.episode, f"{self.series}_{self.season}{self.episode}.srt")
 
-    def get_episode_scenes_dir(self) -> str:
-        """Directory for individual video scenes."""
-        return os.path.join(self.base_dir, self.series, self.season, self.episode, "scenes")
 
-    def get_scene_clip_path(self, scene_index: int, extension: str = ".mp4") -> str:
-        """Path for a specific scene video clip."""
-        return os.path.join(self.get_episode_scenes_dir(), f"scene_{scene_index:02d}{extension}")
 
     def get_audio_file_path(self) -> str:
         """Path for the extracted audio file (for transcription)."""

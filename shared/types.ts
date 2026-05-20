@@ -61,7 +61,8 @@ export interface LibraryEpisodeStatus {
   has_clips: boolean;
   has_event_analysis: boolean;
   progression_count: number;
-  analysis_status: 'completed' | 'error' | 'pending' | 'not_processed' | 'missing_files';
+  narrative_arc_extraction_status: 'completed' | 'error' | 'pending' | 'not_processed' | 'missing_files';
+  event_driven_video_analysis_status: 'completed' | 'error' | 'not_processed' | 'missing_files';
 }
 
 export interface LibraryUpload {

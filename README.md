@@ -4,124 +4,206 @@
 
 # ANTS: Analysis of Narrative in Television Seriality
 
-**ANTS** is an advanced AI-powered multi-agent framework designed specifically for media scholars and narrative analysts. It provides a comprehensive suite of tools for extracting, analyzing, and visualizing complex narrative structures in long-form television content.
-
-## 🚀 Key Features
-
-### 🏛️ Library & Metadata Management
-- **Automated Series Ingestion**: Create series with just a code and name.
-- **IMDb Integration**: Automatically retrieves official posters and series metadata from the IMDb API.
-- **Hierarchical Management**: Organize your research by Series, Seasons, and Episodes.
-- **Intelligent Status Tracking**: Visual indicators for file presence (SRTs, Plots) and analysis readiness.
-
-### 🧠 Multi-Agent Analysis Engine
-- **Narrative Arc Extraction**: Identify and track story threads across multiple episodes using multi-agent workflows.
-- **Character Profiling**: Automatically extract and stabilize character identities.
-- **Semantic Progression**: Map the evolution of narrative arcs using high-dimensional embeddings.
-- **Vector Search**: Perform semantic queries across the entire series narrative beats.
-
-### 📊 Visualization Dashboard
-- **Interactive Timeline**: Visualize narrative arcs and their presence across episodes in a high-fidelity timeline.
-- **Vector Store Explorer**: Discover semantic relationships and clusters between narrative segments.
-- **Character Network**: Track character appearances and roles within the series.
+**ANTS** is an advanced AI-powered framework designed specifically for media scholars and narrative analysts. It provides a comprehensive suite of tools for extracting, analyzing, and visualizing complex narrative structures in long-form television content.
 
 ---
 
-## 🛠️ Tech Stack
+## 📌 Table of Contents
+1. [Core Features](#-core-features)
+2. [How It Works (Step-by-Step Workflow)](#-how-it-works-step-by-step-workflow)
+3. [UI & Workspace Navigation](#-ui--workspace-navigation)
+4. [Quick Start](#-quick-start)
+5. [Developer Setup & Architecture](#-developer-setup--architecture)
+6. [Environment Configuration](#-environment-configuration)
 
-- **Backend**: Python 3.10+, FastAPI, SQLModel (SQLite), LiteLLM (multi-provider support).
-- **Frontend**: React, TypeScript, Vite, Chakra UI, Plotly.js.
-- **Vector Database**: ChromaDB.
+---
+
+## 🚀 Core Features
+
+### 🏛️ Library & Metadata Management
+* **Automated Series Ingestion:** Create series with just a code and name; pulls official posters and metadata via the IMDb API.
+* **Hierarchical Organization:** Manage research targets seamlessly by Series, Seasons, and Episodes.
+* **Flexible Ingestion Pipelines:** Ingest narrative data via direct upload (plots, subtitles, videos), or utilize automated transcription pipelines.
+* **Intelligent Status Tracking:** Visual readiness indicators for file presence (`.srt`, `.txt` plots, videos) and analysis state.
+
+### 🧠 Multi-Agent Analysis Engine
+* **Narrative Arc Extraction:** Map and track overlapping story threads across multiple episodes using orchestrated multi-agent workflows.
+* **Character Profiling:** Automatically extract, resolve, and stabilize character identities over long-form seriality.
+* **Semantic Progression:** Map the qualitative evolution of narrative beats using high-dimensional embeddings and vector space.
+
+### 🎬 Event-Driven Video Analysis
+* **Automated Video Transcription:** Converts video files (`.mp4`, `.mkv`, etc.) into synchronized subtitle files (`.srt`) using WhisperX (with CUDA acceleration).
+* **Narrative Event Extraction:** Scans transcripts via LLM to identify, timestamp, and qualitatively justify discrete narrative events.
+* **Auto-Clipping Engine:** Automatically segments and extracts individual video clips for each narrative event using FFmpeg.
+* **Arc-to-Event Mapping:** Links visual and audio evidence directly to high-level thematic structures.
+
+### 📊 Visualization Dashboard
+* **Interactive Timeline:** High-fidelity tracking of narrative arcs and their presence across episodes.
+* **Vector Store Explorer:** Interactive 3D PCA visualization of narrative beat clusters to discover hidden semantic relations.
+* **Character Networks:** Track character appearances, prominence, and interactive roles.
+* **Annotated Video Player:** Play back auto-extracted event clips directly alongside their multi-agent narrative annotations.
+
+---
+
+## 📖 How It Works (Step-by-Step Workflow)
+
+### Step 1: Ingest & Populate Media Assets
+Navigate to the **Series Manager**. Initialize your target series (e.g., Code: `B99`, Name: `Brooklyn Nine-Nine`). You can populate an episode's source materials using four methodologies depending on available assets:
+* **Direct Upload:** Drag-and-drop pre-existing written plot summaries (`.txt`), subtitle transcripts (`.srt`), or video files.
+* **Subtitle-Only Ingestion:** Upload an `.srt` and trigger **Generate Plot** to synthesize a linear narrative plot summary via LLM.
+* **Video-Only Ingestion:** Upload a video, run the **Transcription Pipeline** (WhisperX) to generate an `.srt`, then synthesize the `.txt` plot summary.
+* **Batch Generation:** Use the **Generate Missing Plots** feature at the Season level to batch-synthesize missing text summaries from existing subtitle tracks.
+
+> [!IMPORTANT]
+> **Scholar Review & Correction:** Because LLM-generated plot summaries serve as the foundational source material for the multi-agent narrative analysis, scholars should always review the generated `.txt` plots and make qualitative corrections directly in the UI before running the analysis engine.
+
+### Step 2: Orchestrate the Analysis
+Switch to the **Analysis Engine** panel to run targeted background operations:
+* **Narrative Arc Extraction:** Triggers multi-agent workflows over a single episode, season, or entire series to build thematic profiles.
+* **Event-Driven Video Analysis:** Processes video/subtitle pairs to slice narrative events into physical clips via FFmpeg and map them to known arcs.
+
+### Step 3: Explore & Visualize Results
+Open the **Visualization Dashboard** to interpret the data:
+* Use the **Timeline** to study serial pacing and arc distribution.
+* Explore the **Vector Store** to identify semantic recurrences across different seasons.
+* Stream visual evidence directly via the **Event-Driven Video Player**.
+
+---
+
+## 🧭 UI & Workspace Navigation
+
+The sidebar acts as the primary cockpit for the framework:
+
+### 1. Active Panels
+* **Series Manager & File Upload:** The ingestion workspace for library curation and text synthesis.
+* **Analysis Engine:** The control center for executing multi-agent background workers.
+* **Narrative Arcs Dashboard:** The visualization platform subdivided into *Timeline*, *Vector Store*, and *Characters*.
+* **Event Driven Video Analysis:** The interface for inspecting timestamped narrative events and reviewing clipped video clips.
+* **Settings:** Live management UI for LLM providers and API keys.
+
+### 2. Global Workspace Controls
+* **Add Series Form:** Quickly initialize a new dataset folder structure by specifying a short code and display name.
+* **Library Switcher:** Toggle instantly between active series profiles; updating the workspace target dynamically across all views.
 
 ---
 
 ## ⚙️ Quick Start
 
-The easiest way to start **ANTS** is by using the unified startup script.
+The fastest way to launch **ANTS** is by using the unified startup script, which automatically configures both local environment and binaries.
 
 ### 1. Prerequisites
-- **Python 3.10+**
-- **Node.js 18+** (Required only for the first build or development)
+* **Python 3.10+**
+* **Node.js 18+** *(Required only for initial frontend compilation)*
 
-### 2. Launching the App
-1. Clone the repository and navigate to the root folder.
-2. Run the unified startup script:
+### 2. Launching the Framework
+1. Clone the repository and navigate to the project root folder.
+2. Run the automated startup script:
    ```bash
    python run_app.py
-   ```
-3. The script will automatically:
-   - Create a virtual environment and install Python dependencies.
-   - (Optional) Build the frontend if not already present.
-   - Start the backend server and open the application in your browser at `http://localhost:8000`.
+   
 
-### 3. Initial Configuration
-Once the application is running:
-1. Open the **Settings** panel from the sidebar.
-2. Enter your LLM provider details (OpenAI, Azure, etc.) and API keys.
-3. Save the settings. Your configuration is stored in `backend/.env`.
+```
+
+3. The script will dynamically orchestrate the following:
+* Build a Python virtual environment (`.venv`) and install dependencies.
+* Detect your operating system and place correct local `ffmpeg`/`ffprobe` binaries inside `backend/bin/`.
+* Compile and build static production assets for the frontend workspace.
+* Spin up the FastAPI server and launch the app in your browser at `http://localhost:8000`.
+
+
+
+### 3. Core Configuration
+
+1. Open the **Settings** panel from the sidebar inside the app web UI.
+2. Input your preferred LLM provider configurations (OpenAI, Azure, Anthropic, Ollama, etc.) and credentials.
+3. Save settings. This automatically creates and updates your secure `backend/.env` file.
 
 ---
 
-## 🛠️ Manual Setup (Developers)
+## 🛠️ Developer Setup & Architecture
 
-If you wish to run backend and frontend separately for development:
+For active development or modifying backend and frontend modules independently:
 
-### Backend
+### 📐 Technical Architecture & Stack
+
+* **Backend Framework:** Python 3.10+, FastAPI, SQLModel (SQLite storage layer)
+* **Agent Orchestration:** LangGraph (multi-agent workflows), LiteLLM (multi-provider LLM interfacing)
+* **ML & Processing Pipeline:** WhisperX (speech-to-text), PyTorch (CUDA-optimized processing), FFmpeg/FFprobe CLI wrappers (video engineering)
+* **Vector Vector Store:** ChromaDB (high-dimensional narrative beat embeddings)
+* **Frontend Ecosystem:** React 18, TypeScript, Vite, Chakra UI, Plotly.js (3D PCA rendering)
+
+### 1. External Binaries
+
+Ensure `ffmpeg` and `ffprobe` are available on your system `PATH`, or explicitly place compiled binaries in the `backend/bin/` directory so the automation pipelines can locate them.
+
+### 2. Manual Backend Bootstrapping
+
+Activate the isolated virtual environment and initialize the FastAPI development server:
+
 ```bash
 cd backend
 python -m venv .venv
-source .venv/bin/activate  # Or .venv\Scripts\activate on Windows
+
+# On Windows (PowerShell):
+.venv\Scripts\Activate.ps1
+# On Linux/macOS:
+source .venv/bin/activate
+
 pip install -r requirements.txt
 uvicorn app.api.main:app --reload
+
 ```
 
-### Frontend
+> *Note: Database models and vector collections will initialize automatically under `backend/narrative_storage/`.*
+
+### 3. Manual Frontend Bootstrapping
+
+Launch the React Vite development server (proxies API requests natively to port `8000`):
+
 ```bash
 cd frontend
 npm install
 npm run dev
+
 ```
-The dev server will run on `http://localhost:3000` and proxy API calls to the backend.
+
+The client dashboard will run on `http://localhost:3000`.
 
 ---
 
-## 🔑 Environment Variables
+## 🔑 Environment Configuration
 
-The system requires the following core variables (managed via **Settings** UI):
+The framework manages variables dynamically via the **Settings UI** or via direct modification of `backend/.env`.
+
+### Core LLM & Embedding Layer
 
 | Variable | Description |
-| :--- | :--- |
-| **LLM_PROVIDER** | e.g., `openai`, `azure`, `anthropic`, `ollama` |
-| **LLM_MODEL** | The specific model name (e.g., `gpt-4o`) |
-| **LLM_API_KEY** | Your secret API key |
-| **EMBED_PROVIDER** | Provider for embeddings (e.g., `openai`, `azure`) |
-| **EMBED_MODEL** | Model for vectorization (e.g., `text-embedding-3-small`) |
+| --- | --- |
+| **LLM_API_KEY** | Authentication key for your chosen language model provider. |
+| **LLM_API_BASE** | Target endpoint URL for the API provider. |
+| **LLM_MODEL** | Identification string for the model (e.g., `gpt-4o`, `claude-3-5-sonnet`). |
+| **EMBED_API_KEY** | Authentication key for the vector embedding provider. |
+| **EMBED_API_BASE** | Target endpoint URL for the embedding provider. |
 
-*Note: Technical settings like database paths and log levels are pre-configured but can be manually edited in `backend/.env` if needed.*
+### Advanced Engine Parameters
 
----
-
-## 📖 How to Use
-
-### Step 1: Manage your Library
-Go to the **Series Manager** in the sidebar. Create a new series (e.g., code: `B99`, name: `Brooklyn Nine-Nine`). The system will automatically fetch the official poster. Add seasons and episodes, and drag-and-drop your `.txt` plot files or `.srt` subtitle files into the episode details view.
-
-### Step 2: Analyze
-Switch to the **Analysis Engine**. Select your series and run the multi-agent analysis for a single episode, an entire season, or the whole series. The system will process the text, extract entities, and identify stable narrative arcs.
-
-### Step 3: Explore
-Once analysis is complete, open the **Visualization Dashboard**. 
-- Use the **Timeline** to see which arcs appear in which episodes.
-- Explore the **Vector Store** to find semantically similar story beats across the series.
-- View the **Character** tab to analyze narrative importance and appearances.
+| Variable | Default Value | Description |
+| --- | --- | --- |
+| **LLM_PROVIDER** | `""` (derived) | Provider engine string (`openai`, `azure`, `anthropic`, `ollama`). |
+| **EMBED_PROVIDER** | `""` (derived) | Embedding engine string (`openai`, `azure`, `cohere`). |
+| **EMBED_MODEL** | `embed-v-4-0` | Model configuration string for text vectorization. |
+| **DATABASE_NAME** | `sqlite:///./narrative_storage/narrative.db` | Connection string for structural relation mapping. |
+| **PERSIST_DIRECTORY** | `./narrative_storage/chroma_db` | Storage path for ChromaDB vectors. |
 
 ---
 
-## 🤝 Contributing
-Contributions are welcome! Please ensure you follow the coding standards and submit a pull request for any new features or bug fixes.
-
-## 📄 License
-This project is licensed under the MIT License - see the LICENSE file for details.
-
----
 *Created by media scholars, for media scholars.*
+
+```
+
+### Why this is better:
+1. **Clear Split between Scholar & Developer:** The "How It Works" workflow is placed right after features, meaning a non-technical researcher can read the document, understand how to prepare data, and review plots without getting bogged down in terminal commands.
+2. **Unified Script Highlighted:** The `run_app.py` quick start is placed ahead of manual developer instructions, encouraging standard users to use the automated script first.
+3. **Consistent Tone:** Technical requirements are contextualized into an indexable, scannable handbook.
+
+```

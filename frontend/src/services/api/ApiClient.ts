@@ -178,6 +178,13 @@ export class ApiClient {
     return this.request<{ content: string }>(`/library/series/${series}/${season}/${episode}/plot`, options);
   }
 
+  async saveEpisodePlot(series: string, season: string, episode: string, content: string): Promise<ApiResponse<{ status: string; message: string }>> {
+    return this.request<{ status: string; message: string }>(`/library/series/${series}/${season}/${episode}/plot`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    });
+  }
+
   getEpisodeVideoUrl(series: string, season: string, episode: string): string {
     return `${this.baseUrl}/library/series/${series}/${season}/${episode}/video`;
   }
@@ -192,11 +199,7 @@ export class ApiClient {
     return this.request<{ content: string }>(`/library/series/${series}/${season}/${episode}/file/${fileType}`);
   }
 
-  async analyzeVideoScenes(series: string, season: string, episode: string): Promise<ApiResponse<{ status: string; message: string; scenes: any[] }>> {
-    return this.request<{ status: string; message: string; scenes: any[] }>(`/library/series/${series}/${season}/${episode}/analyze-video`, {
-      method: 'POST',
-    });
-  }
+
 
   async transcribeVideo(series: string, season: string, episode: string): Promise<ApiResponse<{ status: string; message: string; srt_path: string }>> {
     return this.request<{ status: string; message: string; srt_path: string }>(`/library/series/${series}/${season}/${episode}/transcribe-video`, {
