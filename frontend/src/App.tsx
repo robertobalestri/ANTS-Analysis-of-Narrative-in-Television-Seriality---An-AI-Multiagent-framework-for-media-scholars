@@ -13,8 +13,11 @@ import {
   TabPanel,
   Divider,
   Input,
+  Flex,
+  Image,
 } from '@chakra-ui/react';
 import styles from '@/styles/components/Layout.module.css';
+import logo from './assets/ants logo only.png';
 import { NarrativeArcManager } from './components/narrative/NarrativeArcManager';
 import { VectorStoreTabManager } from './components/vector/VectorStoreTabManager';
 import { CharacterManager } from './components/character/CharacterManager';
@@ -296,7 +299,10 @@ const App: React.FC = () => {
         <Box className={styles.mainContent}>
           <VStack spacing={4} align="stretch">
             <Box className={styles.header} bg={useColorModeValue('white', 'gray.800')}>
-              <Heading className={styles.pageTitle}>ANTS Analysis of Narrative in Television Seriality</Heading>
+              <Flex align="center" justify="center" gap={3}>
+                <Image src={logo} alt="ANTS Logo" boxSize="40px" objectFit="contain" />
+                <Heading className={styles.pageTitle} m={0}>ANTS Analysis of Narrative in Television Seriality</Heading>
+              </Flex>
             </Box>
             <Box px={4}>{renderActiveSection()}</Box>
           </VStack>
