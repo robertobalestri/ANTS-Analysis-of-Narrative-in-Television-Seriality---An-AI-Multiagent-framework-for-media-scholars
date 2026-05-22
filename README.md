@@ -13,6 +13,10 @@
 > A comprehensive comparison of the new features, pipeline extensions, and multi-agent graph optimizations is readable in [CHANGES.md](CHANGES.md). The repository for the earlier, text-only prototype implementation is archived at [robertobalestri/MAS-AI-Assisted-Narrative-Arcs-Extraction-TV-Series](https://github.com/robertobalestri/MAS-AI-Assisted-Narrative-Arcs-Extraction-TV-Series).
 
 
+### 📞 Contact
+
+For inquiries, please email: [roberto.balestri2@unibo.it](mailto:roberto.balestri2@unibo.it)
+
 ---
 
 ## 📌 Table of Contents
